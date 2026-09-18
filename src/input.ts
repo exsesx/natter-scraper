@@ -13,6 +13,24 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 const nonemptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
+/** Compare the original JSON decimal with validated cents to detect Number rounding. */
+function matchesCents(text: string, cents: number): boolean {
+  const [coefficient = "", exponent = "0"] = text.toLowerCase().split("e");
+  const [integer = "", fraction = ""] = coefficient.split(".");
+  const digits = `${integer}${fraction}`.replace(/^(-?)0+/, "$1");
+  const significant = digits.replace(/0+$/, "");
+
+  if (!significant || significant === "-") return cents === 0;
+
+  const expected = String(cents).replace(/0+$/, "");
+  const scale =
+    Number(exponent) - fraction.length + digits.length - significant.length + 2;
+
+  return (
+    significant === expected && scale === String(cents).length - expected.length
+  );
+}
+
 /** Load an exported JSON catalog without scraping or changing its contents. */
 export function readCatalog(path: string): Effect.Effect<Catalog, InputError> {
   return Effect.gen(function* () {
@@ -26,14 +44,38 @@ export function readCatalog(path: string): Effect.Effect<Catalog, InputError> {
           message: `Could not read ${source}: ${cause instanceof Error ? cause.message : String(cause)}. Check the path and read permissions.`,
         }),
     });
+    const numberSources = new WeakMap<object, Map<string, string>>();
     const value: unknown = yield* Effect.try({
-      try: () => JSON.parse(text),
+      try: () =>
+        JSON.parse(
+          text,
+          function (
+            this: object,
+            key: string,
+            value: unknown,
+            context?: { source?: string },
+          ) {
+            if (typeof value === "number" && context?.source !== undefined) {
+              const fields =
+                numberSources.get(this) ?? new Map<string, string>();
+
+              fields.set(key, context.source);
+              numberSources.set(this, fields);
+            }
+
+            return value;
+          },
+        ),
       catch: (cause) =>
         new InputError({
           message: `Could not parse JSON in ${source}: ${cause instanceof Error ? cause.message : String(cause)}. Open a JSON catalog exported by this application.`,
         }),
     });
-    const cents = (amount: unknown, field: string) =>
+    const cents = (
+      amount: unknown,
+      field: string,
+      original: string | undefined,
+    ) =>
       Effect.gen(function* () {
         if (
           typeof amount !== "number" ||
@@ -44,9 +86,16 @@ export function readCatalog(path: string): Effect.Effect<Catalog, InputError> {
             `${field} must be a nonnegative finite number.`,
           );
 
-        return yield* parseMoney(String(amount)).pipe(
+        const parsed = yield* parseMoney(String(amount)).pipe(
           Effect.mapError((error) => invalid(`${field}: ${error.message}`)),
         );
+
+        if (original === undefined || !matchesCents(original, parsed))
+          return yield* invalid(
+            `${field} cannot retain its exact value at cent precision.`,
+          );
+
+        return parsed;
       });
 
     if (!isObject(value)) return yield* invalid("Expected an object.");
@@ -55,7 +104,11 @@ export function readCatalog(path: string): Effect.Effect<Catalog, InputError> {
     if (!Array.isArray(value.results))
       return yield* invalid("results must be an array.");
 
-    const totalCents = yield* cents(value.total, "total");
+    const totalCents = yield* cents(
+      value.total,
+      "total",
+      numberSources.get(value)?.get("total"),
+    );
     const results: ResultItem[] = [];
     let sum = 0;
 
@@ -74,7 +127,11 @@ export function readCatalog(path: string): Effect.Effect<Catalog, InputError> {
       if (typeof item.description !== "string")
         return yield* invalid(`${field}.description must be a string.`);
 
-      const priceCents = yield* cents(item.price, `${field}.price`);
+      const priceCents = yield* cents(
+        item.price,
+        `${field}.price`,
+        numberSources.get(item)?.get("price"),
+      );
       let colors: string[] | undefined;
 
       if ("colors" in item) {

@@ -73,7 +73,7 @@ bun run scrape --input products.json
 bun run scrape --input products.json -o products.csv # Convert and exit
 ```
 
-The loader checks the JSON shape, cent precision, and total before opening the browser or exporting. Malformed files fail with exit code `1` and no catalog output. An empty saved catalog with total zero is valid. Only JSON files are supported as input; CSV/TSV and stdin are not. `--format` selects the export format. Saved JSON contains no original product count or crawl duration, so the loaded view reports the result count and total only. This validates the saved data's consistency, not its freshness or source coverage.
+The loader checks the JSON shape, cent precision, and total before opening the browser or exporting. It rejects prices or totals that JSON number conversion would round, even when the rounded number looks valid. Malformed files fail with exit code `1` and no catalog output. An empty saved catalog with total zero is valid. Only JSON files are supported as input; CSV/TSV and stdin are not. `--format` selects the export format. Saved JSON contains no original product count or crawl duration, so the loaded view reports the result count and total only. This validates the saved data's consistency, not its freshness or source coverage.
 
 Pipes and `--no-interactive` export the loaded catalog to stdout unless `--output` names a file. CLI output still replaces an existing destination, including the input file if you explicitly use the same path for both. To reformat a file in place, use `--output`; shell redirection to the input path would truncate it before the CLI can read it.
 

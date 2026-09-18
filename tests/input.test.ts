@@ -100,6 +100,55 @@ describe("saved JSON catalogs", () => {
     );
   });
 
+  test.each(["1.00000000000000001", "90071992547409.91", "1e-400", "-1e-400"])(
+    "rejects parse-time precision loss in %s",
+    async (amount) => {
+      const rounded = String(JSON.parse(amount));
+
+      await expect(
+        load(
+          `{"results":[{"name":"Model","description":"","price":${amount}}],"total":${rounded}}`,
+          true,
+        ),
+      ).rejects.toThrow(
+        "results[0].price cannot retain its exact value at cent precision",
+      );
+      await expect(
+        load(
+          `{"results":[{"name":"Model","description":"","price":${rounded}}],"total":${amount}}`,
+          true,
+        ),
+      ).rejects.toThrow(
+        "total cannot retain its exact value at cent precision",
+      );
+    },
+  );
+
+  test.each([
+    "1.2300",
+    "123e-2",
+    "1.23e2",
+    "0.001e1",
+    "1E+2",
+    "-0.000e999",
+    "0e-400",
+    "90071992547409.90",
+    "70368744177664.10",
+    "900719925474099e-1",
+  ])("retains exact cents written as %s", async (amount) => {
+    const expected = JSON.parse(amount);
+
+    expect(
+      await load(
+        `{"results":[{"name":"Model","description":"","price":${amount}}],"total":${amount}}`,
+        true,
+      ),
+    ).toEqual({
+      results: [{ name: "Model", description: "", price: expected }],
+      total: expected,
+    });
+  });
+
   test("reports malformed JSON separately from read and validation errors", async () => {
     await expect(load("name,price\nModel,1.23", true)).rejects.toThrow(
       "Could not parse JSON",

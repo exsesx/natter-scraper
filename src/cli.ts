@@ -10,7 +10,7 @@ import {
 } from "effect/unstable/cli";
 import { defaultConcurrency } from "./concurrency";
 import { crawl } from "./crawl";
-import { serializeCatalog } from "./format";
+import { formatMoney, serializeCatalog } from "./format";
 import { readCatalog } from "./input";
 import { writeResult, writeStream } from "./output";
 import { resolveOutputFormat } from "./output-format";
@@ -222,7 +222,7 @@ function runCatalog(
 
       yield* writeStream(
         process.stderr,
-        `${inputPath === undefined ? `Completed: ${result.productCount} products, ` : "Loaded: "}${result.catalog.results.length} results, $${result.catalog.total.toFixed(2)}${savedPath ? `; saved ${savedPath}` : ""}.\n`,
+        `${inputPath === undefined ? `Completed: ${result.productCount} products, ` : "Loaded: "}${result.catalog.results.length} results, $${formatMoney(result.catalog.total)}${savedPath ? `; saved ${savedPath}` : ""}.\n`,
       );
 
       return 0;

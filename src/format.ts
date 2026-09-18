@@ -1,5 +1,12 @@
 import type { Catalog, OutputFormat } from "./types";
 
+/** Pad validated catalog amounts without re-rounding their binary representation. */
+export function formatMoney(amount: number): string {
+  const [whole, fraction = ""] = String(amount).split(".");
+
+  return `${whole}.${fraction.padEnd(2, "0")}`;
+}
+
 function textCell(value: string, delimiter: string): string {
   // Mitigate common spreadsheet formula prefixes before delimiter escaping.
   const text = /^[\t\r\n]|^\s*[=+\-@]/u.test(value) ? `'${value}` : value;
@@ -15,7 +22,7 @@ function serializeDelimited(catalog: Catalog, delimiter: string): string {
     [
       textCell(result.name, delimiter),
       textCell(result.description, delimiter),
-      result.price.toFixed(2),
+      formatMoney(result.price),
       textCell(result.colors?.join("; ") ?? "", delimiter),
     ].join(delimiter),
   );

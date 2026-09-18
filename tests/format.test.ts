@@ -1,11 +1,47 @@
 import { expect, test } from "bun:test";
-import { serializeCatalog } from "../src/format";
+import { Effect } from "effect";
+import { centsToNumber, parseMoney } from "../src/catalog";
+import { formatMoney, serializeCatalog } from "../src/format";
 import type { Catalog } from "../src/types";
 
 const catalog: Catalog = {
   results: [{ name: "Phone", description: "Small", price: 24.9 }],
   total: 24.9,
 };
+
+test("money display pads validated decimal amounts without changing cents", () => {
+  for (const [amount, expected] of [
+    [0, "0.00"],
+    [0.01, "0.01"],
+    [24.9, "24.90"],
+    [90071992547409.9, "90071992547409.90"],
+    [70368744177664.1, "70368744177664.10"],
+  ] as const)
+    expect(formatMoney(amount)).toBe(expected);
+});
+
+test("CSV and TSV preserve cents for large amounts accepted by catalog validation", () => {
+  for (const expected of ["90071992547409.90", "70368744177664.10"]) {
+    const cents = Effect.runSync(parseMoney(expected));
+    const price = Effect.runSync(centsToNumber(cents));
+    const input: Catalog = {
+      results: [{ name: "Large amount", description: "Exact cents", price }],
+      total: price,
+    };
+
+    for (const [format, delimiter] of [
+      ["csv", ","],
+      ["tsv", "\t"],
+    ] as const)
+      expect(serializeCatalog(input, { format })).toBe(
+        [
+          ["name", "description", "price", "colors"].join(delimiter),
+          ["Large amount", "Exact cents", expected, ""].join(delimiter),
+          "",
+        ].join("\r\n"),
+      );
+  }
+});
 
 test("default and explicit JSON preserve compact bytes and trailing newline", () => {
   const expected =

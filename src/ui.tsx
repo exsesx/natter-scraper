@@ -3,6 +3,7 @@ import { Box, render, Text, useInput, useWindowSize } from "ink";
 import { useEffect, useState } from "react";
 import { ResultBrowser } from "./browser";
 import { createDesktopActions, type DesktopActions } from "./desktop";
+import { formatMoney } from "./format";
 import { type writeResult, writeStream } from "./output";
 import { fitText, safeText } from "./terminal-text";
 import type { Completion, Progress } from "./types";
@@ -148,7 +149,7 @@ export function createTerminalUI({
                     : `Completed: ${completion.productCount} products, `) +
                     completion.catalog.results.length +
                     " results, $" +
-                    completion.catalog.total.toFixed(2) +
+                    formatMoney(completion.catalog.total) +
                     (savedPath
                       ? `; saved ${safeText(savedPath).replace(/\n/gu, " ")}`
                       : "; no file saved") +

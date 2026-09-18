@@ -83,6 +83,22 @@ describe("CLI saved catalog input", () => {
     expect(await readFile(inputPath, "utf8")).toBe(original);
   });
 
+  test("large valid prices keep exact cents in CSV and the completion summary", async () => {
+    const path = join(directory, "large-money.json");
+    await writeFile(
+      path,
+      '{"results":[{"name":"Large amount","description":"Exact cents","price":90071992547409.90}],"total":90071992547409.90}',
+    );
+
+    const result = await run(["--input", path, "--format", "csv"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe(
+      "name,description,price,colors\r\nLarge amount,Exact cents,90071992547409.90,\r\n",
+    );
+    expect(result.stderr).toContain("Loaded: 1 results, $90071992547409.90.");
+  });
+
   test.each([
     {
       format: "csv",
@@ -150,6 +166,11 @@ describe("CLI saved catalog input", () => {
     {
       name: "wrong-total",
       content: JSON.stringify({ ...catalog, total: 37.6 }),
+    },
+    {
+      name: "rounded-money",
+      content:
+        '{"results":[{"name":"Invalid price","description":"","price":1.00000000000000001}],"total":1}',
     },
     {
       name: "invalid-last-row",

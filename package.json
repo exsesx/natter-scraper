@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "A fixture-tested CLI for the Web Scraper static e-commerce catalog",
+  "license": "MIT",
   "packageManager": "bun@1.4.2",
   "engines": {
     "bun": "1.4.2"

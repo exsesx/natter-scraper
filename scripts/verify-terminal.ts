@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { stripVTControlCharacters } from "node:util";
@@ -335,13 +342,22 @@ async function setSavePath(session: Session, path: string) {
   await press(session, path, path);
 }
 
+async function confirmSave(session: Session, path: string) {
+  const marker = `Saved ${path}`;
+
+  // Keep the complete destination visible so an earlier save cannot acknowledge
+  // this one. Catalog rows also redraw while the asynchronous write is pending.
+  session.resize(Math.max(80, marker.length + 4), 30);
+  await press(session, keys.enter, marker);
+}
+
 async function browserSaves(directory: string) {
   await terminalSession(async (session) => {
     startFixture(session, [], {}, directory);
     await session.waitFor("Catalog complete", 0, crawlCompletionTimeoutMs);
     await press(session, "s", "Save catalog");
     await setSavePath(session, "saved catalog.json");
-    await press(session, keys.enter, "Fixture Laptop");
+    await confirmSave(session, join(directory, "saved catalog.json"));
 
     const saved = JSON.parse(
       await readFile(join(directory, "saved catalog.json"), "utf8"),
@@ -377,7 +393,7 @@ async function browserSaves(directory: string) {
     await setSavePath(session, "compact.json");
     await press(session, keys.shiftTab, "Format: JSON pretty");
     await press(session, keys.shiftTab, "Format: JSON compact");
-    await press(session, keys.enter, "Fixture Laptop");
+    await confirmSave(session, join(directory, "compact.json"));
 
     assert.equal(
       await readFile(join(directory, "compact.json"), "utf8"),
@@ -387,7 +403,7 @@ async function browserSaves(directory: string) {
     await press(session, "s", "Save catalog");
     await setSavePath(session, "pretty.json");
     await press(session, keys.shiftTab, "Format: JSON pretty");
-    await press(session, keys.enter, "Fixture Laptop");
+    await confirmSave(session, join(directory, "pretty.json"));
 
     assert.equal(
       await readFile(join(directory, "pretty.json"), "utf8"),
@@ -397,7 +413,7 @@ async function browserSaves(directory: string) {
     await press(session, "s", "Save catalog");
     await setSavePath(session, "overridden.txt");
     await press(session, keys.tab, "Format: CSV");
-    await press(session, keys.enter, "Fixture Laptop");
+    await confirmSave(session, join(directory, "overridden.txt"));
 
     const csv = await readFile(join(directory, "overridden.txt"), "utf8");
 
@@ -479,7 +495,7 @@ async function browserLoads(directory: string) {
 
     await press(session, "s", "Save catalog");
     await setSavePath(session, "reopened-products-0s.json");
-    await press(session, keys.enter, "Saved phone");
+    await confirmSave(session, join(directory, "reopened-products-0s.json"));
 
     assert.deepEqual(
       JSON.parse(
@@ -590,7 +606,9 @@ async function terminalCase(
   console.log(`PASS ${name}`);
 }
 
-const directory = await mkdtemp(join(tmpdir(), "natter-terminal-"));
+const directory = await realpath(
+  await mkdtemp(join(tmpdir(), "natter-terminal-")),
+);
 
 try {
   await browserNavigation(directory);

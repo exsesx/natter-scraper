@@ -407,30 +407,30 @@ test("details retain their position until selecting another product, with bounde
 test("JSON formatting controls appear only in JSON and leave other views unchanged", async () => {
   const view = await screen({ ...largeCompletion, pretty: true }, { rows: 20 });
 
-  expect(view.text()).not.toContain("r toggle");
+  expect(view.text()).not.toContain("r - Format");
   expect(view.text()).not.toContain("JSON · pretty");
 
   await view.key("r");
   await view.key(keys.enter);
 
-  expect(view.text()).toContain("[/] product");
-  expect(view.text()).not.toContain("r toggle");
+  expect(view.text()).toContain("[ - Previous  ] - Next");
+  expect(view.text()).not.toContain("r - Format");
 
   await view.key(keys.tab);
 
-  expect(view.text()).toContain("JSON · pretty r toggle");
-  expect(view.text()).toContain("Tab table");
-  expect(view.text()).not.toContain("[/] product");
+  expect(view.text()).toContain("JSON · pretty r - Format");
+  expect(view.text()).toContain("Tab - Table");
+  expect(view.text()).not.toContain("[ - Previous  ] - Next");
 
   await view.key("d");
   await view.key("r");
 
-  expect(view.text()).toContain("JSON · compact r toggle");
+  expect(view.text()).toContain("JSON · compact r - Format");
   expect(view.text()).toContain("JSON preview · 1–7 of ");
 
   await view.key("s");
 
-  expect(view.text()).not.toContain("r toggle");
+  expect(view.text()).not.toContain("r - Format");
 
   await view.key(keys.clear);
   await view.key("gG[d]u.json");
@@ -610,7 +610,13 @@ test("responsive layouts keep the total, navigation, and selected product inform
   await view.resize(40, 16);
 
   expect(view.text()).toContain("Total $345,701.52");
-  expect(view.text()).toContain("Tab JSON");
+  expect(view.text()).toContain("Tab - JSON");
+  expect(view.text()).toContain("q - Quit");
+
+  await view.key(keys.enter);
+
+  expect(view.text()).toContain("[ - Previous  ] - Next  Esc - Back");
+  expect(view.text()).toContain("q - Quit");
   expect(view.text().trimEnd().split("\n").length).toBeLessThanOrEqual(15);
   expect(
     view
@@ -707,12 +713,12 @@ test("unsaved completion ignores file actions; successful saves enable the lates
       overwrite: false,
     },
   ]);
-  expect(view.text()).toMatch(/f Open file\s+o Folder\s+p Copy path/u);
+  expect(view.text()).toMatch(/f - Open\s+o - Folder\s+p - Copy path/u);
 
   await view.key("s");
 
-  expect(view.text()).not.toContain("f Open file");
-  expect(view.text()).toContain("Ctrl+C cancel");
+  expect(view.text()).not.toContain("f - Open");
+  expect(view.text()).toContain("Ctrl+C - Cancel");
 
   await view.key(keys.clear);
   await view.key("new catalog.csv");
@@ -730,7 +736,7 @@ test("unsaved completion ignores file actions; successful saves enable the lates
   for (const key of ["p", "o", "f"]) {
     await view.key(key);
 
-    expect(view.text()).toMatch(/f Open file\s+o Folder\s+p Copy path/u);
+    expect(view.text()).toMatch(/f - Open\s+o - Folder\s+p - Copy path/u);
   }
 
   expect(view.copies).toEqual([resolve("new catalog.csv")]);
@@ -802,7 +808,7 @@ test("Save cycles both ways through all formats without changing the path or can
 
   await view.key("s");
 
-  expect(view.text()).not.toContain("r toggle");
+  expect(view.text()).not.toContain("r - Format");
 
   for (const label of [
     "CSV",
@@ -840,7 +846,7 @@ test("Save cycles both ways through all formats without changing the path or can
 
   await view.key(keys.tab);
 
-  expect(view.text()).toContain("JSON · compact r toggle");
+  expect(view.text()).toContain("JSON · compact r - Format");
 });
 
 for (const pretty of [false, true]) {
@@ -897,7 +903,7 @@ test("Save retains JSON formatting through replacement confirmation", async () =
   await view.key(keys.enter);
 
   expect(view.text()).toContain("Replace existing file?");
-  expect(view.text()).not.toContain("r toggle");
+  expect(view.text()).not.toContain("r - Format");
 
   await view.key(keys.escape);
 
@@ -913,7 +919,7 @@ test("Save retains JSON formatting through replacement confirmation", async () =
     { text: expected, overwrite: false },
     { text: expected, overwrite: true },
   ]);
-  expect(view.text()).toContain("JSON · pretty r toggle");
+  expect(view.text()).toContain("JSON · pretty r - Format");
 });
 
 test("existing save destination requires confirmation and Escape preserves the saved path", async () => {

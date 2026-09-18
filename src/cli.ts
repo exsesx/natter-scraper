@@ -78,7 +78,8 @@ TERMINAL
 
   View:  Tab table/JSON    arrows / Page Up/Down / Home/End navigate
          d/u or Ctrl+d/u half page    Space/b full page down/up
-         g/G first/last    Enter details    [/] previous/next product in details
+         g/G first/last    Enter details
+         [ - previous product    ] - next product in details
          r pretty/compact in JSON    ? help/back
   Copy:  c choose format    j JSON    v CSV    t TSV
   Save:  s save (Tab/Shift+Tab: auto, CSV, TSV, JSON compact, JSON pretty)

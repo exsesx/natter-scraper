@@ -63,11 +63,11 @@ export function TerminalView(props: ViewProps) {
       " active" +
       (progress.retries ? ` · ${progress.retries} retries` : ""),
     "",
-    "Ctrl+C cancel",
+    "Ctrl+C - Cancel",
   ];
   const visible =
     height < lines.length
-      ? [lines[0] ?? "", "Ctrl+C cancel"].slice(-height)
+      ? [lines[0] ?? "", "Ctrl+C - Cancel"].slice(-height)
       : lines;
 
   return (

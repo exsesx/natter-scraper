@@ -23,7 +23,7 @@ export function browserHelp(feedback: string, savedPath: string | undefined) {
     "Browse\n" +
     "Up/Down select a row. d/u or Ctrl+d/u move half a page down/up.\n" +
     "Space/Page Down move a full page down; b/Page Up move a full page up. g/Home and G/End jump to the first/last row.\n" +
-    "Enter opens full product details. [/] move to the previous/next product. Escape returns. Tab switches Table and JSON.\n" +
+    "Enter opens full product details. Use [ for the previous product and ] for the next. Escape returns. Tab switches Table and JSON.\n" +
     "JSON, details, and help use the same navigation keys to scroll. Each view remembers its position. In JSON, r toggles pretty/compact and returns to the top.\n\n" +
     "Export the whole catalog\n" +
     "c chooses a copy format. j copies JSON, v CSV, t TSV.\n" +
@@ -49,29 +49,23 @@ export function footerFor(
 ) {
   switch (dialogType) {
     case "save":
-      return [
-        "Enter save   Esc cancel   Tab format",
-        "←/→ edit   Home/End   Ctrl+u clear",
-      ];
+      return ["Enter - Save  Esc - Cancel", "Tab - Format  Ctrl+U - Clear"];
     case "replace":
       return [
-        "Enter replace file   Esc back",
+        "Enter - Replace  Esc - Back",
         "The saved file changes only after confirmation.",
       ];
     case "copy":
-      return [
-        "↑/↓ choose   Enter copy   Esc cancel",
-        "Copies every result row in the catalog.",
-      ];
+      return ["↑/↓ - Choose  Enter - Copy", "Esc - Cancel"];
     default:
       return [
         {
-          table: "↑/↓  d/u  Enter details  Tab JSON",
-          details: "↑/↓ d/u  [/] product  Esc back",
-          json: "↑/↓ d/u  Space/b page  Tab table",
-          help: "↑/↓ d/u  Space/b page  Esc back",
+          table: "↑/↓ - Move  Enter - Open  Tab - JSON",
+          details: "[ - Previous  ] - Next  Esc - Back",
+          json: "↑/↓ - Scroll  Tab - Table",
+          help: "↑/↓ - Scroll  Esc - Back",
         }[view],
-        "c Copy   s Save   ? Help   q Close",
+        "c - Copy  s - Save  ? - Help  q - Quit",
       ];
   }
 }
@@ -85,8 +79,8 @@ export function BrowserTooSmall({
 }) {
   const messages =
     height < 3
-      ? ["q close · resize terminal"]
-      : ["Terminal too small", "Resize to 40 × 16", "q close"];
+      ? ["q - Quit · resize terminal"]
+      : ["Terminal too small", "Resize to 40 × 16", "q - Quit"];
 
   return (
     <Box flexDirection="column" height={height} width={width}>
@@ -151,7 +145,7 @@ export function BrowserHeader({
             ? `JSON · ${pretty ? "pretty" : "compact"}`
             : "JSON"}
         </Text>
-        {view === "json" && !dialogOpen && <Text dimColor> r toggle</Text>}
+        {view === "json" && !dialogOpen && <Text dimColor> r - Format</Text>}
       </Box>
     </>
   );
@@ -372,8 +366,8 @@ export function BrowserFooter({
         {savedPath && (
           <Text dimColor>
             {dialogOpen
-              ? "Ctrl+C cancel"
-              : "f Open file  o Folder  p Copy path"}
+              ? "Ctrl+C - Cancel"
+              : "f - Open  o - Folder  p - Copy path"}
           </Text>
         )}
       </Box>

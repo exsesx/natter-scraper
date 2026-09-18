@@ -21,7 +21,7 @@ declare const NATTER_STANDALONE: boolean;
 
 const invocation =
   typeof NATTER_STANDALONE !== "undefined" && NATTER_STANDALONE
-    ? `${process.platform === "win32" ? ".\\" : "./"}${basename(process.execPath)}`
+    ? `./${basename(process.execPath)}`
     : "bun run scrape";
 
 export function shouldInteract(options: {
@@ -105,7 +105,7 @@ LIMITS
   and increase load on the source site.
   15s per request/browser operation, 10min per run, 2 HTTP retries.
   Exit codes: 0 success/help, 1 read/scrape/write failure, 2 usage, 130 Ctrl+C.
-  On macOS/Linux, SIGTERM exits 143. Windows forced termination cannot run cleanup.
+  SIGTERM exits 143.
 `;
 
 function runCatalog(

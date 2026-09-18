@@ -5,7 +5,6 @@ import { isAbsolute, join, resolve } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
 const root = resolve(import.meta.dir, "..");
-const windows = process.platform === "win32";
 const compiledFixture = process.env.NATTER_TERMINAL_CLI;
 // Allow the fixture's 30-second crawl deadline plus startup and cleanup.
 const crawlCompletionTimeoutMs = 45_000;
@@ -28,7 +27,7 @@ const keys = {
   shiftTab: "\x1b[Z",
 };
 
-// This is a transcript, not a terminal emulator. ConPTY may redraw/reflow text.
+// This is a transcript, not a terminal emulator.
 const visible = (text: string) =>
   stripVTControlCharacters(text).replace(/\r?\n/g, "");
 
@@ -112,7 +111,7 @@ async function terminalSession(
   };
 
   try {
-    const original = windows ? undefined : await snapshot();
+    const original = await snapshot();
 
     output = "";
 
@@ -123,7 +122,7 @@ async function terminalSession(
         terminal.resize(columns, rows);
 
         // Deliver the POSIX resize notification explicitly for this reusable PTY.
-        if (!windows && child?.exitCode === null) child.kill("SIGWINCH");
+        if (child?.exitCode === null) child.kill("SIGWINCH");
       },
       async waitFor(marker, from = 0, timeoutMs = 15_000) {
         const deadline = Date.now() + timeoutMs;
@@ -142,11 +141,9 @@ async function terminalSession(
       output: () => output,
     });
 
-    if (original !== undefined) {
-      assert.equal(await snapshot(), original, "Terminal modes not restored");
-    }
+    assert.equal(await snapshot(), original, "Terminal modes not restored");
   } finally {
-    // Kill before closing ConPTY so older Windows versions cannot block in close.
+    // Stop the child before releasing its terminal.
     try {
       if (child && child.exitCode === null) {
         child.kill("SIGKILL");
@@ -191,8 +188,6 @@ async function press(session: Session, key: string, marker: string) {
 }
 
 function assertAlternateScreenRestored(output: string) {
-  if (windows) return;
-
   const entered = output.indexOf("\x1b[?1049h");
   const exited = output.lastIndexOf("\x1b[?1049l");
 
@@ -578,19 +573,6 @@ async function terminalCase(
         assert.equal(saved.total, 270.18);
         assert(!text.includes('{"results":'), output);
         assert(finalSummary(output).includes(options.savedPath), output);
-      } else if (windows) {
-        // Pipe/file tests verify exact bytes; ConPTY may reflow this transcript.
-        for (const marker of [
-          "Fixture Laptop",
-          "Color phone",
-          "Pagination phone",
-          "270.18",
-        ]) {
-          assert(
-            text.includes(marker),
-            `Missing export content ${marker}: ${output}`,
-          );
-        }
       } else {
         const match = output.match(
           /(\{"results":\[.*\],"total":270\.18\})\r?\n/,
@@ -608,15 +590,6 @@ async function terminalCase(
   console.log(`PASS ${name}`);
 }
 
-if (windows) {
-  console.log(
-    "SKIP full termios restoration: Windows has no termios; console mode restoration is not verified",
-  );
-  console.log(
-    "SKIP POSIX SIGTERM cases: Windows process termination is not an equivalent signal test",
-  );
-}
-
 const directory = await mkdtemp(join(tmpdir(), "natter-terminal-"));
 
 try {
@@ -631,14 +604,12 @@ try {
     slow: true,
   });
 
-  if (!windows) {
-    await terminalCase("browser SIGTERM", { signal: "SIGTERM", expected: 143 });
-    await terminalCase("running SIGTERM", {
-      signal: "SIGTERM",
-      expected: 143,
-      slow: true,
-    });
-  }
+  await terminalCase("browser SIGTERM", { signal: "SIGTERM", expected: 143 });
+  await terminalCase("running SIGTERM", {
+    signal: "SIGTERM",
+    expected: 143,
+    slow: true,
+  });
 
   await terminalCase("explicit stdout bypasses the browser", {
     args: ["--output", "-"],

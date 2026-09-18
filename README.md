@@ -6,9 +6,9 @@ For assessment review, use `bun run scrape --no-interactive` to print the JSON o
 
 ## Run
 
-Use Bun **1.4.2**, pinned in `.bun-version`, `mise.toml`, and `package.json`.
+Supported platforms are macOS and Linux with glibc, on x64 and arm64. Use Bun **1.4.2**, pinned in `.bun-version`, `mise.toml`, and `package.json`.
 
-Scraping and browser integration tests also require an installed Chrome, Chromium, Edge, or Brave. The scraper uses Bun's experimental [WebView API](https://bun.com/docs/runtime/webview) with the Chrome backend on every platform. Bun finds standard installations; set `BUN_CHROME_PATH` to an absolute executable path when needed. Scraping launches dedicated headless browser processes and never attaches to your open browser.
+Scraping and browser integration tests also require an installed Chrome, Chromium, Edge, or Brave. The scraper uses Bun's experimental [WebView API](https://bun.com/docs/runtime/webview) with the Chrome backend on both platforms. Bun finds standard installations; set `BUN_CHROME_PATH` to an absolute executable path when needed. Scraping launches dedicated headless browser processes and never attaches to your open browser.
 
 From the repository root:
 
@@ -160,7 +160,7 @@ Individual commands are `test`, `typecheck`, `lint`, and `format`. Tests use cap
 
 The benchmark uses the production reader on 12 synthetic products with independently specified prices, including equal-price storage choices and colors. It warms up the browser, measures each concurrency twice in opposite orders, and checks identical output on every run. JSON measurements go to stdout and progress goes to stderr. It makes only loopback requests and requires the same browser installation as scraping.
 
-[CI](.github/workflows/check.yml) runs `check`, `test:terminal`, and `test:binary`, then builds native artifacts for macOS, Linux, and Windows on x64 and arm64. The benchmark is a separate manual command. Check [workflow results](https://github.com/exsesx/natter-scraper/actions/workflows/check.yml) for a specific commit. Cross-compilation alone does not establish native behavior; [platform verification](docs/distribution.md#verify-on-the-target-platform) records the test boundaries.
+[CI](.github/workflows/check.yml) runs `check`, `test:terminal`, and `test:binary`, then builds native artifacts for macOS and Linux on x64 and arm64. The benchmark is a separate manual command. Check [workflow results](https://github.com/exsesx/natter-scraper/actions/workflows/check.yml) for a specific commit. Cross-compilation alone does not establish native behavior; [platform verification](docs/distribution.md#verify-on-the-target-platform) records the test boundaries.
 
 The toolchain pins Bun **1.4.2** and TypeScript **7.0.2**. Effect and `@effect/platform-bun` use **4.0.0-rc.115**; keep them aligned. Effect v4 is a release candidate and its `effect/unstable/cli` API is explicitly unstable. Exact dependency versions are in [package.json](package.json) and `bun.lock`.
 
@@ -190,6 +190,6 @@ The adapter discovers one HDD button group and one color select, with up to 1,00
 
 Each observation waits for 500 ms of stable product markup and idle tracked network requests, with no `aria-busy` marker. This handles the observed site and tested asynchronous updates, but cannot prove that an arbitrary later timer will never change the page. Missing fields, unsupported currency/precision, script or required-request errors, conflicting identities, and empty results fail. Dated fixtures and bounded live checks are evidence, not a guarantee of future behavior.
 
-Linux executables target glibc, not musl. Desktop actions require [platform helpers](docs/distribution.md#desktop-actions); mocked tests do not verify actual clipboard or launcher integration. Windows force termination cannot provide graceful cleanup, and full Windows console-mode restoration is unverified. Cancellation cannot undo an action already handed to a desktop helper; a force-killed process cannot run cleanup.
+Linux executables target glibc, not musl. Desktop actions require [platform helpers](docs/distribution.md#desktop-actions); mocked tests do not verify actual clipboard or launcher integration. Cancellation cannot undo an action already handed to a desktop helper; a force-killed process cannot run cleanup.
 
 AI agents assisted with implementation, tests, source inspection, and documentation. The repository contains no private recruitment correspondence.

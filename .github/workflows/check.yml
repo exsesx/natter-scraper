@@ -22,10 +22,6 @@ jobs:
             runner: macos-15-intel
           - platform: darwin-arm64
             runner: macos-15
-          - platform: windows-x64
-            runner: windows-2025
-          - platform: windows-arm64
-            runner: windows-11-arm
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
     steps:
@@ -38,9 +34,9 @@ jobs:
       - uses: browser-actions/setup-chrome@v2.2.0
         id: chrome
         with:
-          # Windows arm64 needs snapshots. On macOS, the version installer
-          # preserves the .app bundle that the channel installer strips.
-          chrome-version: ${{ matrix.platform == 'windows-arm64' && 'latest' || startsWith(matrix.platform, 'darwin-') && '153.0.8010.52' || 'stable' }}
+          # On macOS, the version installer preserves the .app bundle
+          # that the channel installer strips.
+          chrome-version: ${{ startsWith(matrix.platform, 'darwin-') && '153.0.8010.52' || 'stable' }}
           install-dependencies: true
       - name: Configure Chrome sandbox on Linux
         if: runner.os == 'Linux'
@@ -61,19 +57,6 @@ jobs:
           EOF
           sudo apparmor_parser --replace /etc/apparmor.d/natter-ci-chrome
           timeout 15s "$BUN_CHROME_PATH" --headless --disable-gpu --dump-dom about:blank
-      - name: Configure Chrome sandbox on Windows
-        if: matrix.platform == 'windows-x64'
-        shell: pwsh
-        env:
-          BUN_CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
-        run: |
-          # Chrome for Testing ships the installer that grants its sandbox access.
-          $chromeDirectory = Split-Path -Parent $env:BUN_CHROME_PATH
-          $chromeSetup = Join-Path $chromeDirectory 'setup.exe'
-          $setupResult = Start-Process -FilePath $chromeSetup -ArgumentList "--configure-browser-in-directory=`"$chromeDirectory`"" -Wait -PassThru
-          # Upstream notes that setup can return nonzero after applying permissions.
-          # Keep that diagnostic; the following startup and fixture checks must pass.
-          Write-Host "Chrome sandbox setup exit code: $($setupResult.ExitCode)"
       - name: Verify WebView startup
         env:
           BUN_CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}

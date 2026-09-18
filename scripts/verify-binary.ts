@@ -35,10 +35,6 @@ async function run(
   // No Bun, checkout-relative paths, inherited preload options, or desktop tools.
   const env: NodeJS.ProcessEnv = { ...environment, CI: "1", ...extraEnv };
 
-  for (const key of Object.keys(env)) {
-    if (key.toUpperCase() === "PATH") delete env[key];
-  }
-
   env.PATH = emptyPath;
 
   if (fixtureUrl) env.FIXTURE_URL = fixtureUrl;

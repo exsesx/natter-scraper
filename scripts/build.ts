@@ -7,8 +7,6 @@ export const targets = [
   "bun-darwin-x64",
   "bun-linux-arm64",
   "bun-linux-x64",
-  "bun-windows-arm64",
-  "bun-windows-x64",
 ] as const;
 
 export type Target = (typeof targets)[number];
@@ -24,13 +22,11 @@ function parseTarget(value: string): Target {
 }
 
 export function nativeTarget(): Target {
-  const os = process.platform === "win32" ? "windows" : process.platform;
-
-  return parseTarget(`bun-${os}-${process.arch}`);
+  return parseTarget(`bun-${process.platform}-${process.arch}`);
 }
 
 export function binaryName(target: Target): string {
-  return `natter-scraper-${target.slice(4)}${target.includes("windows") ? ".exe" : ""}`;
+  return `natter-scraper-${target.slice(4)}`;
 }
 
 /** Production and fixture executables share every bundling option. */
@@ -64,10 +60,10 @@ export async function compileBinary({
         setup(build) {
           // Ink's optional React DevTools entry is unreachable in production,
           // but its dynamic import is still resolved while bundling.
-          build.onLoad(
-            { filter: /[/\\]ink[/\\]build[/\\]devtools\.js$/ },
-            () => ({ contents: "export {};", loader: "js" }),
-          );
+          build.onLoad({ filter: /\/ink\/build\/devtools\.js$/ }, () => ({
+            contents: "export {};",
+            loader: "js",
+          }));
         },
       },
     ],

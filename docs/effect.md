@@ -50,7 +50,7 @@ sequenceDiagram
 
 [`writeResult`](../src/output.ts) uses `Effect.acquireUseRelease` to open, write, and close a temporary file. A close failure can accompany a write failure in the typed error cause. Publication is uninterruptible, so cancellation cannot stop between starting rename/link and observing its result. An exit finalizer removes the temporary filename. The [architecture guide](architecture.md#data-and-output) explains overwrite and stdout guarantees.
 
-The CLI races work against cancellation: whichever finishes first interrupts the other branch. It leaves its scopes before applying the exit code. Ctrl+C exits 130; POSIX SIGTERM exits 143. Windows force termination cannot guarantee cleanup.
+The CLI races work against cancellation: whichever finishes first interrupts the other branch. It leaves its scopes before applying the exit code. Ctrl+C exits 130; SIGTERM exits 143. A force-killed process cannot run cleanup.
 
 An interactive scrape allocates its terminal scope before discovery so progress can be displayed. It writes any requested initial export before showing results. React callbacks then start separate action fibers for user-requested saves and desktop actions. Shutdown interrupts and joins the active action, restores the terminal, then permits the completion summary. Renderer teardown failures reach the CLI. Desktop helpers expose promises without an abort contract, so interruption cannot guarantee stopping or undoing a clipboard or file-opening action.
 

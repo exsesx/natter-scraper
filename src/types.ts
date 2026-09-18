@@ -41,7 +41,6 @@ export interface Progress {
 
 export interface Completion {
   catalog: Catalog;
-  output: string;
   format: OutputFormat;
   pretty: boolean;
   outputPath?: string;

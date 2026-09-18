@@ -8,6 +8,9 @@ output/
 /products.json
 /products.csv
 /products.tsv
+/catalog.json
+/catalog.csv
+/catalog.tsv
 .env
 .env.*
 !.env.example

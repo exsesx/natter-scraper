@@ -168,6 +168,20 @@ try {
     assert.equal(saved.stdout, "");
     assert.equal(await readFile(output, "utf8"), json.stdout);
 
+    const inferredOutput = join(directory, "inferred.csv");
+    const inferred = await run(
+      fixture,
+      ["--output", inferredOutput],
+      fixtureUrl,
+    );
+
+    assert.equal(inferred.code, 0, inferred.stderr);
+    assert.equal(inferred.stdout, "");
+    assert.match(
+      await readFile(inferredOutput, "utf8"),
+      /^name,description,price,colors\r\n/,
+    );
+
     failing = true;
 
     for (const args of [
@@ -221,7 +235,7 @@ try {
   );
 
   console.log(
-    `Standalone ${target}: help, version, usage, JSON/CSV/TSV, atomic file output, and failure checks passed outside checkout with no Bun on PATH.`,
+    `Standalone ${target}: help, version, usage, JSON/CSV/TSV, format inference, atomic files, failure behavior, and browser checks passed. Headless exports ran outside checkout with no Bun on PATH.`,
   );
 } finally {
   await rm(directory, { recursive: true, force: true });

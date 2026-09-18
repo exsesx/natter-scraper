@@ -7,6 +7,7 @@ import { Data, Effect } from "effect";
 export class OutputError extends Data.TaggedError("OutputError")<{
   readonly message: string;
   readonly cause?: unknown;
+  readonly code?: string;
 }> {}
 
 const streamError = (cause: unknown) =>
@@ -78,7 +79,7 @@ export function writeStream(
 /** Return the saved absolute path, or undefined when writing stdout. */
 export function writeResult(
   document: string,
-  options: { path?: string; stdout?: Writable } = {},
+  options: { path?: string; stdout?: Writable; overwrite?: boolean } = {},
 ): Effect.Effect<string | undefined, OutputError> {
   const path = options.path;
 
@@ -95,11 +96,25 @@ export function writeResult(
       `.${basename(destination)}.${randomUUID()}.tmp`,
     );
 
-    const fileError = (cause: unknown) =>
-      new OutputError({
-        message: `Could not save ${destination}: ${cause instanceof Error ? cause.message : String(cause)}. Check the parent directory and write permissions.`,
+    const fileError = (cause: unknown) => {
+      const code =
+        typeof cause === "object" &&
+        cause !== null &&
+        "code" in cause &&
+        typeof cause.code === "string"
+          ? cause.code
+          : undefined;
+      const help =
+        code === "EEXIST"
+          ? "Choose another path or confirm overwrite."
+          : "Check the parent directory and write permissions.";
+
+      return new OutputError({
+        message: `Could not save ${destination}: ${cause instanceof Error ? cause.message : String(cause)}. ${help}`,
         cause,
+        ...(code === undefined ? {} : { code }),
       });
+    };
 
     let owned = false;
     const write = Effect.acquireUseRelease(
@@ -129,7 +144,11 @@ export function writeResult(
     return write.pipe(
       Effect.andThen(
         Effect.tryPromise({
-          try: () => fs.rename(temporary, destination),
+          // Linking publishes the completed file only if the destination is absent.
+          try: () =>
+            options.overwrite === false
+              ? fs.link(temporary, destination)
+              : fs.rename(temporary, destination),
           catch: fileError,
         }).pipe(Effect.uninterruptible),
       ),

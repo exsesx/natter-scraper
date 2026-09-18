@@ -1,241 +1,106 @@
-import { setImmediate as immediate } from "node:timers/promises";
 import { Effect, Exit, Fiber } from "effect";
 import { Box, render, Text, useInput, useWindowSize } from "ink";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { ResultBrowser } from "./browser";
 import { createDesktopActions, type DesktopActions } from "./desktop";
-import { serializeCatalog } from "./format";
-import type { Completion, OutputFormat, Progress } from "./types";
-
-const copyFormats = { j: "json", v: "csv", t: "tsv" } as const;
+import { type writeResult, writeStream } from "./output";
+import { fitText, safeText } from "./terminal-text";
+import type { Completion, Progress } from "./types";
 
 interface ViewProps {
   progress: Progress;
   completion?: Completion;
   desktop: DesktopActions;
+  saveOutput?: typeof writeResult;
   onCancel(): void;
   onClose(code: number): void;
+  onSaved?(path: string): void;
   onActionFiber?(fiber: Fiber.Fiber<void>): void;
 }
 
-// Exported so offline tests can exercise the same keyboard and rendering path.
-export function TerminalView({
-  progress,
-  completion,
-  desktop,
-  onCancel,
-  onClose,
-  onActionFiber,
-}: ViewProps) {
-  const { columns: width } = useWindowSize();
-  const [feedback, setFeedback] = useState("");
-  const [inputReady, setInputReady] = useState(false);
-  const busy = useRef(false);
-  const actionFiber = useRef<Fiber.Fiber<void> | undefined>(undefined);
-  const mounted = useRef(true);
+// Exported so offline tests exercise the same input and rendering path.
+export function TerminalView(props: ViewProps) {
+  const { columns, rows } = useWindowSize();
+  const [ready, setReady] = useState(false);
+  const width = Math.max(1, columns);
+  const height = Math.max(1, rows - 1);
 
-  useEffect(() => {
-    return () => {
-      mounted.current = false;
+  useInput(
+    (input, key) => {
+      if (key.ctrl && input === "c") props.onCancel();
+    },
+    { isActive: !props.completion },
+  );
+  useEffect(() => setReady(true), []);
 
-      if (actionFiber.current)
-        Effect.runFork(Fiber.interrupt(actionFiber.current));
-    };
-  }, []);
+  if (!ready) return null;
 
-  function action(key: string) {
-    if (!completion || busy.current) return;
-
-    if ((key === "p" || key === "o") && !completion.outputPath) return;
-
-    busy.current = true;
-    setFeedback(key === "o" ? "Opening folder…" : "Copying…");
-
-    const format: OutputFormat | undefined =
-      key === "c"
-        ? completion.format
-        : copyFormats[key as keyof typeof copyFormats];
-
-    actionFiber.current = Effect.runFork(
-      Effect.gen(function* () {
-        if (format) {
-          const output =
-            format === completion.format
-              ? completion.output
-              : serializeCatalog(completion.catalog, {
-                  format,
-                  pretty: completion.pretty,
-                });
-
-          yield* desktop.copy(output);
-        } else if (completion.outputPath) {
-          if (key === "p") yield* desktop.copy(completion.outputPath);
-          else yield* desktop.openFolder(completion.outputPath);
-        }
-
-        if (mounted.current) {
-          setFeedback(
-            format
-              ? `${format.toUpperCase()} copied`
-              : key === "p"
-                ? "Path copied"
-                : "Folder open requested",
-          );
-        }
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            if (mounted.current)
-              setFeedback(
-                `Action failed: ${error.message}. ${completion.outputPath ? `File: ${completion.outputPath}` : `${completion.format.toUpperCase()} remains in terminal output.`}`,
-              );
-          }),
-        ),
-        Effect.ensuring(
-          Effect.sync(() => {
-            busy.current = false;
-          }),
-        ),
-      ),
+  if (props.completion)
+    return (
+      <ResultBrowser
+        {...props}
+        completion={props.completion}
+        width={width}
+        height={height}
+      />
     );
-    onActionFiber?.(actionFiber.current);
-  }
 
-  useInput((input, key) => {
-    if (key.ctrl && input === "c") {
-      if (completion) onClose(130);
-      else onCancel();
-
-      return;
-    }
-
-    if (!completion) return;
-
-    if (input === "q" || key.return) onClose(0);
-    else if (
-      input === "c" ||
-      input === "j" ||
-      input === "v" ||
-      input === "t" ||
-      input === "p" ||
-      input === "o"
-    )
-      action(input);
-  });
-
-  // Show actionable controls only after useInput has installed its listeners.
-  useEffect(() => setInputReady(true), []);
-
-  if (!inputReady) return null;
+  const progress = props.progress;
+  const lines = [
+    progress.phase === "discovering"
+      ? "Discovering catalog"
+      : "Reading products",
+    " ",
+    progress.processedProducts +
+      " read · " +
+      progress.discoveredProducts +
+      " found · " +
+      progress.pages +
+      " pages",
+    progress.queued +
+      " queued · " +
+      progress.active +
+      " active" +
+      (progress.retries ? ` · ${progress.retries} retries` : ""),
+    "",
+    "Ctrl+C cancel",
+  ];
+  const visible =
+    height < lines.length
+      ? [lines[0] ?? "", "Ctrl+C cancel"].slice(-height)
+      : lines;
 
   return (
-    <Box flexDirection="column" width={Math.max(1, width)}>
-      {completion ? (
-        <CompletionView
-          completion={completion}
-          width={width}
-          feedback={feedback}
-        />
-      ) : (
-        <RunningView progress={progress} />
-      )}
+    <Box
+      flexDirection="column"
+      width={width}
+      height={height}
+      paddingX={width > 4 ? 1 : 0}
+    >
+      {visible.map((line, index) => (
+        <Text
+          key={line}
+          bold={index === 0}
+          {...(index === 0 ? { color: "cyan" as const } : {})}
+        >
+          {fitText(line, width > 4 ? width - 2 : width) || " "}
+        </Text>
+      ))}
     </Box>
-  );
-}
-
-function RunningView({ progress }: { progress: Progress }) {
-  return (
-    <>
-      <Text bold color="cyan">
-        {progress.phase === "discovering"
-          ? "Discovering catalog"
-          : "Reading products"}
-      </Text>
-      <Text>
-        {progress.processedProducts} read · {progress.discoveredProducts} found
-        · {progress.pages} pages
-      </Text>
-      <Text dimColor>
-        {progress.queued} queued · {progress.active} active
-        {progress.retries > 0 ? ` · ${progress.retries} retries` : ""}
-      </Text>
-      <Box marginTop={1}>
-        <Text dimColor>Ctrl+C cancel</Text>
-      </Box>
-    </>
-  );
-}
-
-function CompletionView({
-  completion,
-  width,
-  feedback,
-}: {
-  completion: Completion;
-  width: number;
-  feedback: string;
-}) {
-  return (
-    <>
-      <Text bold color="cyan">
-        Catalog complete
-      </Text>
-      <Text>
-        {completion.productCount} products · {completion.catalog.results.length}{" "}
-        results
-      </Text>
-      <Text>
-        Total ${completion.catalog.total.toFixed(2)} ·{" "}
-        {(completion.elapsedMs / 1000).toFixed(1)}s
-      </Text>
-      <Text wrap="wrap">
-        {completion.outputPath
-          ? `Saved ${completion.outputPath}`
-          : `${completion.format.toUpperCase()} written to stdout`}
-      </Text>
-      <Box
-        marginTop={1}
-        flexDirection={width < 55 ? "column" : "row"}
-        flexWrap="wrap"
-        gap={width < 55 ? 0 : 2}
-      >
-        <Text>
-          <Text color="cyan">c</Text> copy {completion.format.toUpperCase()}
-        </Text>
-        {Object.entries(copyFormats)
-          .filter(([, format]) => format !== completion.format)
-          .map(([key, format]) => (
-            <Text key={key}>
-              <Text color="cyan">{key}</Text> copy {format.toUpperCase()}
-            </Text>
-          ))}
-        {completion.outputPath && (
-          <Text>
-            <Text color="cyan">p</Text> copy path
-          </Text>
-        )}
-        {completion.outputPath && (
-          <Text>
-            <Text color="cyan">o</Text> open folder
-          </Text>
-        )}
-        <Text>
-          <Text color="cyan">q / Enter</Text> close
-        </Text>
-      </Box>
-      {feedback && <Text wrap="wrap">{feedback}</Text>}
-    </>
   );
 }
 
 export function createTerminalUI({
   onCancel,
   desktop = createDesktopActions(),
+  saveOutput,
   stdin = process.stdin,
   stdout = process.stderr,
   renderTerminal = render,
 }: {
   onCancel(): void;
   desktop?: DesktopActions;
+  saveOutput?: typeof writeResult;
   stdin?: NodeJS.ReadStream;
   stdout?: NodeJS.WriteStream;
   renderTerminal?: typeof render;
@@ -250,9 +115,9 @@ export function createTerminalUI({
     retries: 0,
   };
   let completion: Completion | undefined;
+  let savedPath: string | undefined;
   let stopped = false;
   let finish: ((result: Effect.Effect<number>) => void) | undefined;
-  let retiring: Fiber.Fiber<void> | undefined;
   let actionFiber: Fiber.Fiber<void> | undefined;
   let closing: Fiber.Fiber<void> | undefined;
 
@@ -263,9 +128,8 @@ export function createTerminalUI({
         closing = Effect.runFork(
           Effect.uninterruptible(
             Effect.gen(function* () {
-              // Join interruption so delayed action finalizers finish before CLI exit.
+              // Join action finalizers before restoring the terminal and resolving.
               if (actionFiber) yield* Fiber.interrupt(actionFiber);
-              if (retiring) yield* Fiber.join(retiring);
 
               const previous = instance;
               instance = undefined;
@@ -273,6 +137,23 @@ export function createTerminalUI({
 
               if (previous)
                 yield* Effect.promise(() => previous.waitUntilExit());
+
+              // Alternate-screen output is discarded. Write the lasting summary only
+              // after Ink has restored the previous screen and released raw input.
+              if (completion && code === 0)
+                yield* writeStream(
+                  stdout,
+                  "Completed: " +
+                    completion.productCount +
+                    " products, " +
+                    completion.catalog.results.length +
+                    " results, $" +
+                    completion.catalog.total.toFixed(2) +
+                    (savedPath
+                      ? `; saved ${safeText(savedPath).replace(/\n/gu, " ")}`
+                      : "; no file saved") +
+                    ".\n",
+                ).pipe(Effect.orDie);
             }).pipe(
               Effect.onExit((exit) =>
                 Effect.sync(() => {
@@ -295,29 +176,30 @@ export function createTerminalUI({
     <TerminalView
       progress={progress}
       {...(completion ? { completion } : {})}
+      {...(saveOutput ? { saveOutput } : {})}
       desktop={desktop}
       onCancel={onCancel}
       onClose={(code) => {
         Effect.runFork(close(code));
+      }}
+      onSaved={(path) => {
+        savedPath = path;
       }}
       onActionFiber={(fiber) => {
         actionFiber = fiber;
       }}
     />
   );
-
-  const mount = () =>
-    renderTerminal(view(), {
-      stdout,
-      stderr: stdout,
-      stdin,
-      patchConsole: false,
-      exitOnCtrlC: false,
-      maxFps: 10,
-      interactive: true,
-    });
-
-  let instance: ReturnType<typeof render> | undefined = mount();
+  let instance: ReturnType<typeof render> | undefined = renderTerminal(view(), {
+    stdout,
+    stderr: stdout,
+    stdin,
+    patchConsole: false,
+    exitOnCtrlC: false,
+    maxFps: 10,
+    interactive: true,
+    alternateScreen: true,
+  });
 
   return {
     update(next: Progress) {
@@ -335,41 +217,11 @@ export function createTerminalUI({
         }
 
         completion = result;
+        savedPath = result.outputPath;
         finish = resume;
-
-        if (instance) instance.rerender(view());
-        else instance = mount();
+        instance?.rerender(view());
 
         return close(130);
-      });
-    },
-    clear(): Effect.Effect<void> {
-      return Effect.gen(function* () {
-        if (stopped || !instance) return;
-
-        const flushing = instance;
-        yield* Effect.promise(() => flushing.waitUntilRenderFlush());
-
-        if (stopped || !instance) return;
-
-        // Ink clear() retains redraw height. Unmount before a direct stdout write
-        // so the completion renderer cannot erase the result from the terminal.
-        const previous = instance;
-        instance = undefined;
-        retiring = Effect.runFork(
-          Effect.uninterruptible(
-            Effect.gen(function* () {
-              previous.clear();
-              previous.unmount();
-              yield* Effect.promise(() => previous.waitUntilExit());
-
-              // Ink defers input cleanup. Let its passive effects and raw-mode teardown
-              // finish before a new renderer starts owning this same terminal.
-              yield* Effect.promise(() => immediate());
-            }),
-          ),
-        );
-        yield* Fiber.join(retiring);
       });
     },
     stop(): Effect.Effect<void> {

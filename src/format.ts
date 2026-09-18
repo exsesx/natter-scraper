@@ -9,17 +9,7 @@ function textCell(value: string, delimiter: string): string {
     : text;
 }
 
-export function serializeCatalog(
-  catalog: Catalog,
-  options: { format?: OutputFormat; pretty?: boolean } = {},
-): string {
-  const { format = "json", pretty = false } = options;
-
-  if (format === "json") {
-    return `${JSON.stringify(catalog, null, pretty ? 2 : undefined)}\n`;
-  }
-
-  const delimiter = format === "csv" ? "," : "\t";
+function serializeDelimited(catalog: Catalog, delimiter: string): string {
   const rows = ["name", "description", "price", "colors"].join(delimiter);
   const results = catalog.results.map((result) =>
     [
@@ -31,4 +21,25 @@ export function serializeCatalog(
   );
 
   return `${[rows, ...results].join("\r\n")}\r\n`;
+}
+
+export function serializeCatalog(
+  catalog: Catalog,
+  options: { format?: OutputFormat; pretty?: boolean } = {},
+): string {
+  const { format = "json", pretty = false } = options;
+
+  switch (format) {
+    case "json":
+      return `${JSON.stringify(catalog, null, pretty ? 2 : undefined)}\n`;
+    case "csv":
+      return serializeDelimited(catalog, ",");
+    case "tsv":
+      return serializeDelimited(catalog, "\t");
+    default: {
+      const unsupported: never = format;
+
+      throw new Error(`Unsupported output format: ${unsupported}`);
+    }
+  }
 }

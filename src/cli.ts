@@ -11,6 +11,7 @@ import {
 import { crawl } from "./crawl";
 import { serializeCatalog } from "./format";
 import { writeResult, writeStream } from "./output";
+import { resolveOutputFormat } from "./output-format";
 import type { OutputFormat } from "./types";
 
 // Replaced by the standalone build; source execution keeps Bun instructions.
@@ -22,19 +23,23 @@ const invocation =
     : "bun run scrape";
 
 export function shouldInteract(options: {
-  interactive: boolean;
+  interactive: boolean | undefined;
+  outputPath?: string;
   stdinTTY?: boolean;
   stdoutTTY?: boolean;
   stderrTTY?: boolean;
   ci?: string;
+  term?: string;
 }): boolean {
   const ci = options.ci?.toLowerCase();
 
   return Boolean(
-    options.interactive &&
+    (options.interactive ?? options.outputPath === undefined) &&
+      options.outputPath !== "-" &&
       options.stdinTTY &&
       options.stdoutTTY &&
       options.stderrTTY &&
+      options.term?.toLowerCase() !== "dumb" &&
       (!ci || ci === "0" || ci === "false"),
   );
 }
@@ -45,24 +50,39 @@ class UsageError extends Data.TaggedError("UsageError")<{
 
 interface Options {
   output: Option.Option<string>;
-  format: OutputFormat;
-  pretty: boolean;
-  interactive: boolean;
+  format: OutputFormat | "auto";
+  pretty: Option.Option<boolean>;
+  interactive: Option.Option<boolean>;
 }
 
 const helpNotes = `
 OUTPUT
-  Selected output goes to stdout or --output. Progress and errors go to stderr.
+  In a terminal, browse the completed catalog without an automatic export.
+  --output FILE saves and exits; add -i / --interactive to browse afterward.
+  --output - always prints and exits.
+  Pipes, CI, TERM=dumb, and --no-interactive export to stdout or --output.
+  --format auto infers .json/.csv/.tsv from FILE; other extensions are rejected.
+  Without FILE, or with --output -, auto selects JSON.
+  An explicit --format json/csv/tsv overrides the filename extension.
   JSON includes results and total. CSV/TSV have name,description,price,colors columns.
-  A failed run emits no partial catalog. --pretty applies only to JSON.
+  A failed run emits no partial catalog. Progress and errors go to stderr.
+  --pretty indents JSON exports and is rejected for CSV/TSV.
+  --no-pretty keeps JSON compact.
+  JSON starts pretty in the browser and compact in exports unless overridden.
 
 TERMINAL
-  Interaction starts automatically when all three streams are terminals.
-  --no-interactive disables progress and hotkeys. Pipes/redirection/CI never wait.
+  With no --output, interaction starts when all three streams are terminals.
+  -i / --interactive enables browsing after --output FILE; --no-interactive disables it.
+  Pipes/redirection/CI, TERM=dumb, and --no-interactive never wait for keys.
 
-  Copy:  c selected format    j JSON    v CSV    t TSV
-  File:  p copy saved path    o open folder
-  Exit:  q / Enter close     Ctrl+C cancel
+  View:  Tab table/JSON    arrows / Page Up/Down / Home/End navigate
+         d/u or Ctrl+d/u half page    Space/b full page down/up
+         g/G first/last    Enter details    [/] previous/next product in details
+         r pretty/compact in JSON    ? help/back
+  Copy:  c choose format    j JSON    v CSV    t TSV
+  Save:  s save (Tab/Shift+Tab: auto, CSV, TSV, JSON compact, JSON pretty)
+  File:  p copy saved path    o open folder    f open file
+  Exit:  q close    Esc back    Ctrl+C cancel
 
 LIMITS
   2 concurrent requests, 15s per request, 10min per run, 2 retries.
@@ -84,17 +104,27 @@ function scrape(
           message: "Output path must not be empty.",
         });
 
-      if (options.pretty && options.format !== "json")
+      const format = yield* resolveOutputFormat(
+        options.format,
+        outputPath,
+      ).pipe(
+        Effect.mapError((error) => new UsageError({ message: error.message })),
+      );
+      const requestedPretty = Option.getOrUndefined(options.pretty);
+
+      if (requestedPretty === true && format !== "json")
         return yield* new UsageError({
-          message: "--pretty is only supported with --format json",
+          message: "--pretty is only supported with JSON output",
         });
 
       const interactive = shouldInteract({
-        interactive: options.interactive,
+        interactive: Option.getOrUndefined(options.interactive),
+        ...(outputPath !== undefined ? { outputPath } : {}),
         stdinTTY: Boolean(process.stdin.isTTY),
         stdoutTTY: Boolean(process.stdout.isTTY),
         stderrTTY: Boolean(process.stderr.isTTY),
         ...(process.env.CI !== undefined ? { ci: process.env.CI } : {}),
+        ...(process.env.TERM !== undefined ? { term: process.env.TERM } : {}),
       });
       const started = performance.now();
       const ui = interactive
@@ -117,24 +147,22 @@ function scrape(
         onProgress: (progress) => ui?.update(progress),
       });
 
-      const output = serializeCatalog(result.catalog, {
-        format: options.format,
-        pretty: options.pretty,
-      });
-
-      if (ui) yield* ui.clear();
-
-      const savedPath = yield* writeResult(
-        output,
-        outputPath === undefined ? {} : { path: outputPath },
-      );
+      const savedPath =
+        !ui || outputPath !== undefined
+          ? yield* writeResult(
+              serializeCatalog(result.catalog, {
+                format,
+                pretty: requestedPretty ?? false,
+              }),
+              outputPath === undefined ? {} : { path: outputPath },
+            )
+          : undefined;
 
       if (ui)
         return yield* ui.complete({
           catalog: result.catalog,
-          output,
-          format: options.format,
-          pretty: options.pretty,
+          format,
+          pretty: requestedPretty ?? true,
           ...(savedPath ? { outputPath: savedPath } : {}),
           productCount: result.productCount,
           elapsedMs: performance.now() - started,
@@ -178,24 +206,29 @@ export function runCli(
         output: Flag.String("output").pipe(
           Flag.withAlias("o"),
           Flag.withDescription(
-            "Save completed output to a file; omitted or '-' means stdout",
+            "Save and exit; add -i to browse afterward; '-' prints to stdout",
           ),
           Flag.optional,
         ),
-        format: Flag.Literals("format", ["json", "csv", "tsv"]).pipe(
+        format: Flag.Literals("format", ["auto", "json", "csv", "tsv"]).pipe(
           Flag.withAlias("f"),
-          Flag.withDescription("Output format; independent of filename"),
-          Flag.withDefault("json"),
+          Flag.withDescription(
+            "Infer from output filename (auto), or choose an explicit format",
+          ),
+          Flag.withDefault("auto"),
         ),
         pretty: Flag.Boolean("pretty").pipe(
-          Flag.withDescription("Indent JSON output"),
-          Flag.withDefault(false),
+          Flag.withDescription(
+            "Indent JSON; --no-pretty selects compact JSON (browser default: pretty; export default: compact)",
+          ),
+          Flag.optional,
         ),
         interactive: Flag.Boolean("interactive").pipe(
+          Flag.withAlias("i"),
           Flag.withDescription(
-            "Terminal progress and hotkeys; disable with --no-interactive",
+            "Terminal browser (default: on without --output, off with it); --no-interactive disables",
           ),
-          Flag.withDefault(true),
+          Flag.optional,
         ),
       },
       (options) =>
@@ -210,6 +243,10 @@ export function runCli(
         {
           command: `${invocation} --output products.json --pretty`,
           description: "Save readable JSON",
+        },
+        {
+          command: `${invocation} -o products.json -i`,
+          description: "Save JSON, then browse the catalog",
         },
         {
           command: `${invocation} --format csv --output products.csv`,

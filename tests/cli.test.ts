@@ -97,12 +97,73 @@ describe("CLI subprocess contract", () => {
     expect(result.stderr).not.toContain("copy JSON");
   });
 
+  test.each([
+    { args: ["-i"] },
+    { args: ["--interactive"] },
+    { args: ["--output", "-", "-i"] },
+  ])(
+    "interactive flags preserve clean redirected output for $args",
+    async ({ args }) => {
+      const result = await run(args);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toBe(`${JSON.stringify(expected)}\n`);
+      expect(result.stderr).toContain("3 products, 4 results");
+      expect(result.stderr).not.toContain("\u001b[?1049h");
+    },
+  );
+
   test("pretty stdout and explicit opt-out retain the same catalog", async () => {
     const result = await run(["--pretty", "--output", "-", "--no-interactive"]);
 
     expect(result.code).toBe(0);
     expect(result.stdout).toBe(`${JSON.stringify(expected, null, 2)}\n`);
   });
+
+  test.each([
+    { args: ["--format", "auto"], pretty: false },
+    { args: ["--format", "auto", "--pretty"], pretty: true },
+    { args: ["--output", "-", "--no-pretty"], pretty: false },
+  ])(
+    "JSON defaults and pretty overrides for $args",
+    async ({ args, pretty }) => {
+      const result = await run(args);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toBe(
+        `${JSON.stringify(expected, null, pretty ? 2 : undefined)}\n`,
+      );
+      expect(result.stderr).not.toContain("copy");
+    },
+  );
+
+  test.each(["json", "JSON"])(
+    "auto infers pretty JSON from .%s before validating --pretty",
+    async (extension) => {
+      const path = join(directory, `pretty.${extension}`);
+      const result = await run(["--output", path, "--pretty"]);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toBe("");
+      expect(await readFile(path, "utf8")).toBe(
+        `${JSON.stringify(expected, null, 2)}\n`,
+      );
+    },
+  );
+
+  test.each(["override.csv", "override.xml", "override"])(
+    "explicit JSON overrides the filename %s",
+    async (filename) => {
+      const path = join(directory, filename);
+      const result = await run(["--format", "json", "--output", path]);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toBe("");
+      expect(await readFile(path, "utf8")).toBe(
+        `${JSON.stringify(expected)}\n`,
+      );
+    },
+  );
 
   test.each([
     {
@@ -131,6 +192,13 @@ describe("CLI subprocess contract", () => {
       expect(saved.code).toBe(0);
       expect(saved.stdout).toBe("");
       expect(await readFile(path, "utf8")).toBe(expected);
+
+      const inferredPath = join(directory, `inferred.${format.toUpperCase()}`);
+      const inferred = await run(["--output", inferredPath, "--no-pretty"]);
+
+      expect(inferred.code).toBe(0);
+      expect(inferred.stdout).toBe("");
+      expect(await readFile(inferredPath, "utf8")).toBe(expected);
     },
   );
 
@@ -192,10 +260,16 @@ describe("CLI subprocess contract", () => {
     { args: ["unexpected-positional"] },
     { args: ["--output"] },
     { args: ["--output", ""] },
+    { args: ["--output", "   "] },
+    { args: ["--output", "products"] },
+    { args: ["--output", "products.xml"] },
+    { args: ["--output", "products.json.gz"] },
     { args: ["--format"] },
     { args: ["--format", "xml"] },
     { args: ["--format", "csv", "--pretty"] },
     { args: ["--pretty", "--format", "tsv"] },
+    { args: ["--pretty", "--output", "products.csv"] },
+    { args: ["--format", "auto", "--output", "products.tsv", "--pretty"] },
   ])("invalid arguments %j exit 2", async ({ args }) => {
     const result = await run(args);
 
@@ -219,6 +293,8 @@ describe("CLI subprocess contract", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("--no-interactive");
+    expect(result.stdout).toContain("-i / --interactive");
+    expect(result.stdout).toContain("--output FILE saves and exits");
     expect(result.stdout).toContain("Exit codes:");
     expect(result.stdout).toContain("--format");
     expect(result.stderr).toBe("");
@@ -226,7 +302,32 @@ describe("CLI subprocess contract", () => {
   });
 });
 
-test("interaction requires all three TTYs and an explicit opt-in default", () => {
+test.each([
+  { outputPath: undefined, interactive: undefined, expected: true },
+  { outputPath: undefined, interactive: true, expected: true },
+  { outputPath: undefined, interactive: false, expected: false },
+  { outputPath: "test.json", interactive: undefined, expected: false },
+  { outputPath: "test.json", interactive: true, expected: true },
+  { outputPath: "test.json", interactive: false, expected: false },
+  { outputPath: "-", interactive: undefined, expected: false },
+  { outputPath: "-", interactive: true, expected: false },
+  { outputPath: "-", interactive: false, expected: false },
+])(
+  "terminal interaction policy for $outputPath and $interactive",
+  ({ outputPath, interactive, expected }) => {
+    expect(
+      shouldInteract({
+        interactive,
+        ...(outputPath !== undefined ? { outputPath } : {}),
+        stdinTTY: true,
+        stdoutTTY: true,
+        stderrTTY: true,
+      }),
+    ).toBe(expected);
+  },
+);
+
+test("interaction requires all three TTYs and no explicit opt-out", () => {
   for (const stdinTTY of [false, true])
     for (const stdoutTTY of [false, true])
       for (const stderrTTY of [false, true]) {
@@ -244,6 +345,20 @@ test("interaction requires all three TTYs and an explicit opt-in default", () =>
       stderrTTY: true,
     }),
   ).toBe(false);
+});
+
+test("dumb terminals disable interaction", () => {
+  const terminals = {
+    interactive: true,
+    stdinTTY: true,
+    stdoutTTY: true,
+    stderrTTY: true,
+  };
+
+  for (const term of ["dumb", "DUMB"])
+    expect(shouldInteract({ ...terminals, term })).toBe(false);
+
+  expect(shouldInteract({ ...terminals, term: "xterm-256color" })).toBe(true);
 });
 
 test("CI disables interaction except unset, empty, 0, or false", () => {

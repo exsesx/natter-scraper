@@ -29,6 +29,14 @@ test("pretty JSON retains the existing two-space indentation", () => {
 `);
 });
 
+test("unsupported formats cannot silently become TSV", () => {
+  expect(() =>
+    // JavaScript callers can bypass OutputFormat's compile-time restriction.
+    // @ts-expect-error Deliberately exercise an unsupported runtime format.
+    serializeCatalog(catalog, { format: "yaml" }),
+  ).toThrow("Unsupported output format: yaml");
+});
+
 const escapedCatalog: Catalog = {
   results: [
     {

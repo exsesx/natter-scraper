@@ -8,6 +8,7 @@ export class DesktopError extends Data.TaggedError("DesktopError")<{
 
 export interface DesktopActions {
   copy(text: string): Effect.Effect<void, DesktopError>;
+  openFile(filePath: string): Effect.Effect<void, DesktopError>;
   openFolder(filePath: string): Effect.Effect<void, DesktopError>;
 }
 
@@ -24,12 +25,10 @@ export function createDesktopActions(
 
     await clipboard.write(text);
   },
-  openDirectory: (directory: string) => Promise<unknown> = async (
-    directory,
-  ) => {
+  openPath: (path: string) => Promise<unknown> = async (path) => {
     const { default: open } = await import("open");
 
-    return open(directory, { wait: false });
+    return open(path, { wait: false });
   },
 ): DesktopActions {
   return {
@@ -38,9 +37,14 @@ export function createDesktopActions(
         try: () => writeClipboard(text),
         catch: desktopError,
       }),
+    openFile: (filePath) =>
+      Effect.tryPromise({
+        try: () => openPath(filePath),
+        catch: desktopError,
+      }).pipe(Effect.asVoid),
     openFolder: (filePath) =>
       Effect.tryPromise({
-        try: () => openDirectory(dirname(filePath)),
+        try: () => openPath(dirname(filePath)),
         catch: desktopError,
       }).pipe(Effect.asVoid),
   };

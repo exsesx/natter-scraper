@@ -1,7 +1,19 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
-  "files": { "includes": ["**", "!tests/fixtures/source/*.html"] },
+  "files": {
+    "includes": [
+      "src/**",
+      "tests/**",
+      "scripts/**",
+      ".github/**",
+      "package.json",
+      "tsconfig.json",
+      "biome.json",
+      "output.schema.json",
+      "!tests/fixtures/source/*.html"
+    ]
+  },
   "formatter": { "indentStyle": "space", "indentWidth": 2 },
   "linter": { "enabled": true, "rules": { "preset": "recommended" } },
   "assist": { "actions": { "source": { "organizeImports": "on" } } }

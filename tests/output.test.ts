@@ -85,6 +85,69 @@ test("successful file output replaces the destination and removes the sibling", 
   ).toBe(false);
 });
 
+test("no-clobber output creates a complete file and removes the sibling", async () => {
+  const path = join(directory, "new-file.json");
+  const document = '{"results":[],"total":0}\n';
+
+  expect(
+    await Effect.runPromise(writeResult(document, { path, overwrite: false })),
+  ).toBe(path);
+  expect(await readFile(path, "utf8")).toBe(document);
+  expect(
+    (await readdir(directory)).some((entry) => entry.endsWith(".tmp")),
+  ).toBe(false);
+});
+
+test("no-clobber conflict retains the destination and exposes EEXIST for confirmation", async () => {
+  const path = join(directory, "existing-file.json");
+
+  await writeFile(path, "original");
+
+  const error = await Effect.runPromise(
+    Effect.flip(writeResult("replacement", { path, overwrite: false })),
+  );
+
+  expect(error._tag).toBe("OutputError");
+  expect(error.code).toBe("EEXIST");
+  expect(error.message).toContain(path);
+  expect(error.message).toContain("confirm overwrite");
+  expect(await readFile(path, "utf8")).toBe("original");
+  expect(
+    (await readdir(directory)).some((entry) => entry.endsWith(".tmp")),
+  ).toBe(false);
+});
+
+test("concurrent no-clobber saves publish exactly one complete result", async () => {
+  const path = join(directory, "concurrent-file.json");
+  const documents = ["first result\n", "second result\n"];
+  const results = await Promise.all(
+    documents.map((document) =>
+      Effect.runPromiseExit(writeResult(document, { path, overwrite: false })),
+    ),
+  );
+  const winner = results.findIndex(Exit.isSuccess);
+  const expected = documents[winner];
+
+  expect(results.filter(Exit.isSuccess)).toHaveLength(1);
+
+  if (expected === undefined) throw new Error("No successful save found");
+
+  expect(await readFile(path, "utf8")).toBe(expected);
+
+  for (const result of results) {
+    if (Exit.isFailure(result)) {
+      expect(Cause.squash(result.cause)).toMatchObject({
+        _tag: "OutputError",
+        code: "EEXIST",
+      });
+    }
+  }
+
+  expect(
+    (await readdir(directory)).some((entry) => entry.endsWith(".tmp")),
+  ).toBe(false);
+});
+
 test("cleanup failure preserves the original replacement failure", async () => {
   const path = join(directory, "cleanup-failure");
 
@@ -135,47 +198,53 @@ test("stdout waits for a backpressured write callback", async () => {
   expect(stream.listenerCount("close")).toBe(0);
 });
 
-test("interruption during file writing closes and removes the temporary file", async () => {
-  const path = join(directory, "interrupted.json");
+test.each([false, true])(
+  "interruption closes and removes the temporary file (overwrite: %s)",
+  async (overwrite) => {
+    const path = join(directory, `interrupted-${overwrite}.json`);
 
-  await writeFile(path, "old");
+    await writeFile(path, "old");
 
-  const controller = new AbortController();
-  const nativeOpen = fs.open;
-  let closed = false;
-  const opening = spyOn(fs, "open").mockImplementation((...args) =>
-    nativeOpen(...args).then((handle) => {
-      const nativeClose = handle.close.bind(handle);
+    const controller = new AbortController();
+    const nativeOpen = fs.open;
+    let closed = false;
+    const opening = spyOn(fs, "open").mockImplementation((...args) =>
+      nativeOpen(...args).then((handle) => {
+        const nativeClose = handle.close.bind(handle);
 
-      spyOn(handle, "close").mockImplementation(() =>
-        nativeClose().then(() => {
-          closed = true;
-        }),
-      );
+        spyOn(handle, "close").mockImplementation(() =>
+          nativeClose().then(() => {
+            closed = true;
+          }),
+        );
 
-      const nativeWrite = handle.writeFile.bind(handle);
+        const nativeWrite = handle.writeFile.bind(handle);
 
-      spyOn(handle, "writeFile").mockImplementation((data, options) => {
-        controller.abort();
+        spyOn(handle, "writeFile").mockImplementation((data, options) => {
+          controller.abort();
 
-        return nativeWrite(data, options);
-      });
+          return nativeWrite(data, options);
+        });
 
-      return handle;
-    }),
-  );
-  const result = await Effect.runPromiseExit(writeResult("new", { path }), {
-    signal: controller.signal,
-  });
-  opening.mockRestore();
+        return handle;
+      }),
+    );
+    const result = await Effect.runPromiseExit(
+      writeResult("new", { path, overwrite }),
+      {
+        signal: controller.signal,
+      },
+    );
+    opening.mockRestore();
 
-  expect(Exit.isFailure(result)).toBe(true);
-  expect(closed).toBe(true);
-  expect(await readFile(path, "utf8")).toBe("old");
-  expect(
-    (await readdir(directory)).some((entry) => entry.endsWith(".tmp")),
-  ).toBe(false);
-});
+    expect(Exit.isFailure(result)).toBe(true);
+    expect(closed).toBe(true);
+    expect(await readFile(path, "utf8")).toBe("old");
+    expect(
+      (await readdir(directory)).some((entry) => entry.endsWith(".tmp")),
+    ).toBe(false);
+  },
+);
 
 test.each([false, true])(
   "close errors remain typed and preserve a primary write error (write failure: %s)",

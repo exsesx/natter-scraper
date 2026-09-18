@@ -7,16 +7,19 @@ import type { Catalog, OutputFormat } from "../../src/types";
 import { createTerminalUI } from "../../src/ui";
 
 const catalog: Catalog = {
-  results: [{ name: "Phone", description: "Test phone", price: 12.34 }],
-  total: 12.34,
+  results: Array.from({ length: 40 }, (_, index) => ({
+    name: `Browser product ${String(index + 1).padStart(2, "0")}`,
+    description: `Details for product ${index + 1}. A description retained in full when inspecting the selected result.`,
+    price: 12.34,
+  })),
+  total: 493.6,
 };
 const format = (process.argv
   .find((arg) => arg.startsWith("--format="))
   ?.split("=")[1] ?? "json") as OutputFormat;
-const output = serializeCatalog(catalog, { format });
 const outputPath = join(tmpdir(), "a folder", "catalog.json");
 
-// Manual PTY fixture. Desktop actions are mocked and never affect this machine.
+// Large PTY fixture. Desktop actions are mocked and never affect this machine.
 let ui: ReturnType<typeof createTerminalUI>;
 
 ui = createTerminalUI({
@@ -27,8 +30,10 @@ ui = createTerminalUI({
   desktop: {
     copy: (text) =>
       Effect.gen(function* () {
-        const outputs = (["json", "csv", "tsv"] as const).map((format) =>
-          serializeCatalog(catalog, { format }),
+        const outputs = (["json", "csv", "tsv"] as const).flatMap((format) =>
+          [false, true].map((pretty) =>
+            serializeCatalog(catalog, { format, pretty }),
+          ),
         );
 
         if (![outputPath, ...outputs].includes(text))
@@ -39,11 +44,23 @@ ui = createTerminalUI({
             }),
           );
       }),
-    openFolder: (path) =>
-      isAbsolute(path)
+    openFile: (path) =>
+      isAbsolute(path) && path === outputPath
         ? Effect.void
         : Effect.fail(
-            new DesktopError({ message: "Nonabsolute path", cause: undefined }),
+            new DesktopError({
+              message: "Unexpected file path",
+              cause: undefined,
+            }),
+          ),
+    openFolder: (path) =>
+      isAbsolute(path) && path === outputPath
+        ? Effect.void
+        : Effect.fail(
+            new DesktopError({
+              message: "Unexpected folder path",
+              cause: undefined,
+            }),
           ),
   },
 });
@@ -60,18 +77,14 @@ if (process.argv.includes("--running")) {
   });
 } else {
   await new Promise((resolve) => setTimeout(resolve, 150));
-  await Effect.runPromise(ui.clear());
-
-  process.stdout.write(output);
 
   process.exitCode = await Effect.runPromise(
     ui.complete({
       catalog,
-      output,
       format,
-      pretty: false,
+      pretty: true,
       outputPath,
-      productCount: 2,
+      productCount: 40,
       elapsedMs: 100,
     }),
   );

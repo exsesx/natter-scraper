@@ -97,6 +97,10 @@ if (import.meta.main) {
       target,
     });
     await copyFile(
+      join(projectRoot, "LICENSE"),
+      join(projectRoot, "dist/LICENSE"),
+    );
+    await copyFile(
       join(projectRoot, "docs/THIRD_PARTY_NOTICES.txt"),
       join(projectRoot, "dist/THIRD_PARTY_NOTICES.txt"),
     );

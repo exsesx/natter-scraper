@@ -1,5 +1,5 @@
 THIRD-PARTY NOTICES
-Natter scraper 0.1.0
+Natter scraper
 
 These notices concern third-party components only. They do not grant a license
 to the scraper application's own code.

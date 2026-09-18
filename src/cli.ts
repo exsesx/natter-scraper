@@ -8,6 +8,7 @@ import {
   Flag,
   GlobalFlag,
 } from "effect/unstable/cli";
+import { version } from "../package.json";
 import { defaultConcurrency } from "./concurrency";
 import { crawl } from "./crawl";
 import { formatMoney, serializeCatalog } from "./format";
@@ -333,7 +334,7 @@ export function runCli(
     );
 
     const application = Command.runWith(command, {
-      version: "0.1.0",
+      version,
       renderErrors: false,
     })(argv).pipe(
       Effect.provideService(Console.Console, cliConsole),

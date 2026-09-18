@@ -6,7 +6,7 @@ Extraction uses Bun.WebView's Chrome backend on both platforms for request inter
 
 Build locally, or download an executable from [GitHub Releases](https://github.com/exsesx/natter-scraper/releases) when a release is available. CI uploads native builds as workflow artifacts; publishing a release is a separate step. The build does not configure publisher signing or notarization.
 
-Keep `THIRD_PARTY_NOTICES.txt` with redistributed executables. `bun run build` copies the [notices](THIRD_PARTY_NOTICES.txt) to `dist/`. Refresh them when upgrading Bun or production dependencies.
+Keep `LICENSE` and `THIRD_PARTY_NOTICES.txt` with redistributed executables. `bun run build` copies the application's [license](../LICENSE) and the [third-party notices](THIRD_PARTY_NOTICES.txt) to `dist/`. Refresh the notices when upgrading Bun or production dependencies.
 
 ## Run an executable
 
@@ -82,6 +82,17 @@ Terminal checks compare `stty -g` before and after each session and exercise Ctr
 The workflow installs a browser with [setup-chrome](https://github.com/browser-actions/setup-chrome), checks that Bun.WebView can start it, and passes its absolute path to all checks. Linux uses the stable channel. macOS pins Chrome for Testing `153.0.8010.52`: the action's version installer preserves the `.app` bundle needed by Chrome's helper processes, while its channel installer strips that directory. Use the remote run for evidence on each platform; local macOS verification does not establish that the other jobs pass.
 
 On Ubuntu runners, CI allows user namespaces for that exact browser executable through an AppArmor profile, following [Chromium's guidance](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md). It checks browser startup before and after loading the profile. Chrome's sandbox remains enabled; the workflow does not change the machine-wide namespace policy. Linux installations with the same restriction may need an administrator to configure their browser's profile.
+
+## Publish a release
+
+Releases are manual. Maintainers need repository write access and an authenticated [GitHub CLI](https://cli.github.com/); no agent application or personal tooling is required.
+
+1. Update `version` in [package.json](../package.json). The CLI imports it, and both source and standalone checks compare `--version` with it. The release tag must be `v` followed by that version.
+2. Install with `bun install --frozen-lockfile`, then run `check`, `test:terminal`, and `test:binary` as described above. Review and commit the release changes, then push.
+3. Wait for the `Check` workflow to pass on that exact commit for all four platforms. Inspect its annotations as well as its overall status. Do not substitute results from an earlier commit.
+4. Download that run's four artifacts into an empty directory with `gh run download RUN_ID --dir ARTIFACT_DIRECTORY`. Collect the four executables and identical copies of `LICENSE` and `THIRD_PARTY_NOTICES.txt` into a separate release directory. Use these native CI builds, not old files left in a local `dist/` directory.
+5. Generate `SHA256SUMS` for the four executables and both license/notice files. Write release notes covering changes, platform/browser requirements, the checked commit and CI link, and verification limits. Create the release with `gh release create TAG --target CHECKED_COMMIT --title TAG --notes-file NOTES_FILE --latest`, passing all seven asset paths as positional arguments. Replace the uppercase placeholders with the selected version, commit, run, and local paths; never move an existing release tag.
+6. Confirm the new release is marked latest and its tag points to the checked commit. Download its assets, verify their hashes against `SHA256SUMS`, and check `--version` on a native executable. Keep both license/notice files alongside redistributed executables.
 
 ## Desktop actions
 

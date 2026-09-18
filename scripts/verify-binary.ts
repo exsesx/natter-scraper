@@ -9,6 +9,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { version as packageVersion } from "../package.json";
 import { defaultConcurrency } from "../src/concurrency";
 import { fixturePage, fixturePrefix } from "../tests/helpers/fixture-site";
 import { binaryName, compileBinary, nativeTarget, projectRoot } from "./build";
@@ -88,7 +89,7 @@ try {
 
   assert.equal(version.code, 0);
   assert.equal(version.stderr, "");
-  assert.equal(version.stdout.trim(), "natter-scraper v0.1.0");
+  assert.equal(version.stdout.trim(), `natter-scraper v${packageVersion}`);
 
   const invalid = await run(production, ["--unknown"]);
 

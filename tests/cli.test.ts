@@ -2,6 +2,7 @@ import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { version } from "../package.json";
 import { shouldInteract } from "../src/cli";
 import { fixturePage, fixturePrefix } from "./helpers/fixture-site";
 
@@ -284,7 +285,7 @@ describe("CLI subprocess contract", () => {
     const result = await run(["--version"], "failure");
 
     expect(result.code, result.stderr).toBe(0);
-    expect(result.stdout.trim()).toBe("natter-scraper v0.1.0");
+    expect(result.stdout.trim()).toBe(`natter-scraper v${version}`);
     expect(result.stderr).toBe("");
     expect(result.requests).toBe(0);
   });

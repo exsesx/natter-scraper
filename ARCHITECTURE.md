@@ -26,7 +26,7 @@ flowchart TD
     BROWSER -->|"Copy or open"| DESKTOP["desktop.ts<br/>Clipboard, file, folder"]
     DESKTOP -->|"Feedback"| BROWSER
     DIRECT --> EXIT["Print summary and exit"]
-    BROWSER -->|"Close"| EXIT
+    BROWSER --->|"Close"| EXIT
 ```
 
 The terminal mode is chosen during flag validation. For an interactive scrape, its progress screen starts before discovery; the result browser shown above appears only after the catalog and any initial file write succeed. With `--input`, validation finishes before the terminal starts. Importing makes no network requests and launches no extraction browser.

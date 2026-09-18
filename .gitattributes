@@ -1,0 +1,4 @@
+* text=auto eol=lf
+
+# Keep captured source fragments unchanged, including their original whitespace.
+tests/fixtures/source/*.html -text -whitespace

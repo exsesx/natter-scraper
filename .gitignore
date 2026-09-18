@@ -1,0 +1,13 @@
+.DS_Store
+/_local/
+.idea/
+node_modules/
+dist/
+coverage/
+output/
+/products.json
+/products.csv
+/products.tsv
+.env
+.env.*
+!.env.example

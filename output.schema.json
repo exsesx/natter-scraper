@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Natter e-commerce scraper output",
+  "description": "Structural contract. Completeness, source accuracy, identity uniqueness, exact money, and cross-record totals require application tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["results", "total"],
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/product" }
+    },
+    "total": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Sum of retained result prices in source-currency units, calculated using checked integer cents."
+    }
+  },
+  "$defs": {
+    "product": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "description", "price"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "price": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Verified price for this product/configuration in source-currency units, not integer cents or a string."
+        },
+        "colors": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Include only when at least two distinct selectable colors exist."
+        }
+      }
+    }
+  }
+}

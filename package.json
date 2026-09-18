@@ -1,0 +1,38 @@
+{
+  "name": "natter-scraper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A fixture-tested CLI for the Web Scraper static e-commerce catalog",
+  "packageManager": "bun@1.4.2",
+  "engines": {
+    "bun": "1.4.2"
+  },
+  "scripts": {
+    "scrape": "bun src/cli.ts",
+    "help": "bun src/cli.ts --help",
+    "build": "bun scripts/build.ts",
+    "test": "bun test ./tests",
+    "test:terminal": "bun scripts/verify-terminal.ts",
+    "test:binary": "bun scripts/verify-binary.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "check": "bun run typecheck && bun run lint && bun run test"
+  },
+  "dependencies": {
+    "@effect/platform-bun": "4.0.0-rc.115",
+    "cheerio": "1.2.0",
+    "clipboardy": "5.3.2",
+    "effect": "4.0.0-rc.115",
+    "ink": "7.1.1",
+    "open": "11.0.4",
+    "react": "19.3.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@types/bun": "1.4.2",
+    "@types/react": "19.3.0",
+    "typescript": "7.0.2"
+  }
+}

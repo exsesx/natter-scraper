@@ -51,7 +51,7 @@ test.each([
   const product = await Effect.runPromise(
     createProductReader({
       canonical: (raw) => (raw === url ? raw : undefined),
-      timeoutMs: 4_000,
+      timeoutMs: 15_000,
     }).pipe(
       Effect.flatMap((read) => read(html, url)),
       Effect.scoped,

@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { shouldInteract } from "../src/cli";
 import { fixturePage, fixturePrefix } from "./helpers/fixture-site";
 
-setDefaultTimeout(30_000);
+// Some cases run two fixture crawls, each with a 30-second deadline.
+setDefaultTimeout(75_000);
 
 const expected = {
   results: [

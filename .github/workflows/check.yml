@@ -38,8 +38,9 @@ jobs:
       - uses: browser-actions/setup-chrome@v2.2.0
         id: chrome
         with:
-          # Chrome for Testing has no Windows arm64 stable channel.
-          chrome-version: ${{ matrix.platform == 'windows-arm64' && 'latest' || 'stable' }}
+          # Windows arm64 needs snapshots. On macOS, the version installer
+          # preserves the .app bundle that the channel installer strips.
+          chrome-version: ${{ matrix.platform == 'windows-arm64' && 'latest' || startsWith(matrix.platform, 'darwin-') && '153.0.8010.52' || 'stable' }}
           install-dependencies: true
       - name: Configure Chrome sandbox on Linux
         if: runner.os == 'Linux'

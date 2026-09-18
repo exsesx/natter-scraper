@@ -15,7 +15,7 @@ finishCli(
           ...options,
           baseUrl,
           retryDelayMs: 1,
-          requestTimeoutMs: 5_000,
+          requestTimeoutMs: 15_000,
           runTimeoutMs: 30_000,
         }),
     }),

@@ -10,7 +10,7 @@ import { Effect } from "effect";
 import { buildCatalog } from "../src/catalog";
 import { createProductReader } from "../src/product-browser";
 
-setDefaultTimeout(30_000);
+setDefaultTimeout(60_000);
 
 // Explicit synthetic prices differ from the public site's old increments.
 const storage = `<label class="memory">HDD:</label><div class="swatches">
@@ -52,7 +52,7 @@ const server = Bun.serve({
 const url = `http://127.0.0.1:${server.port}/catalog/product/1`;
 const reader = createProductReader({
   canonical: (raw) => (raw === url ? raw : undefined),
-  timeoutMs: 4_000,
+  timeoutMs: 15_000,
 });
 const read = (html: string, signal?: AbortSignal) =>
   Effect.runPromise(
@@ -155,7 +155,7 @@ describe("browser-observed product configurations", () => {
           const readProduct = yield* createProductReader({
             canonical: (raw) =>
               raw === url || raw === secondUrl ? raw : undefined,
-            timeoutMs: 4_000,
+            timeoutMs: 15_000,
           });
           const first = yield* readProduct(
             product(
@@ -493,10 +493,22 @@ describe("browser-observed product configurations", () => {
       ),
     ).rejects.toThrow("Required browser request returned HTTP 404");
     await expect(
-      read(
-        product(
-          "",
-          `document.querySelector('.product-wrapper').setAttribute('aria-busy','true')`,
+      Effect.runPromise(
+        createProductReader({
+          canonical: (raw) => (raw === url ? raw : undefined),
+          // Keep the deliberate settling failure short; normal reads allow cold startup.
+          timeoutMs: 4_000,
+        }).pipe(
+          Effect.flatMap((readProduct) =>
+            readProduct(
+              product(
+                "",
+                `document.querySelector('.product-wrapper').setAttribute('aria-busy','true')`,
+              ),
+              url,
+            ),
+          ),
+          Effect.scoped,
         ),
       ),
     ).rejects.toThrow("Product did not settle");

@@ -1,9 +1,11 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { shouldInteract } from "../src/cli";
 import { fixturePage, fixturePrefix } from "./helpers/fixture-site";
+
+setDefaultTimeout(30_000);
 
 const expected = {
   results: [

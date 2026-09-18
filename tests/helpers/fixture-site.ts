@@ -17,7 +17,15 @@ export function fixturePage(path: string, search: string): string | undefined {
     <label class="memory">HDD:</label><div class="swatches">
       <button value="128" class="active">128</button><button value="256">256</button>
       <button value="512" disabled>512</button><button value="1024" disabled>1024</button>
-    </div></div></div>`;
+    </div></div></div><script>
+      document.querySelectorAll('.swatches button').forEach(button => {
+        button.addEventListener('click', () => {
+          document.querySelectorAll('.swatches button').forEach(item => item.classList.remove('active'));
+          button.classList.add('active');
+          document.querySelector('.price').textContent = button.value === '128' ? '$100.10' : '$120.10';
+        });
+      });
+    </script>`;
 
   if (path === `${prefix}/product/2` || path === `${prefix}/product/3`) {
     const name = path.endsWith("/2") ? "Color phone" : "Pagination phone";

@@ -65,7 +65,7 @@ TERMINAL
   Exit:  q / Enter close     Ctrl+C cancel
 
 LIMITS
-  2 concurrent requests, 15s per request, 5min per run, 2 retries.
+  2 concurrent requests, 15s per request, 10min per run, 2 retries.
   Exit codes: 0 success/help, 1 scrape/write failure, 2 usage, 130 Ctrl+C.
   On macOS/Linux, SIGTERM exits 143. Windows forced termination cannot run cleanup.
 `;

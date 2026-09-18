@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { Effect } from "effect";
-import { buildCatalog } from "../src/catalog";
 import { ExtractionError, parseListing, parseProduct } from "../src/site";
 
 const base = "https://webscraper.io/test-sites/e-commerce/static";
@@ -14,16 +13,18 @@ const laptop = fixture("product-31");
 const phone = fixture("product-1");
 
 describe("real source fixtures", () => {
-  test("storage prices, disabled capacity, and description are separate facts", () => {
+  test("a snapshot reads only the displayed price and discovers enabled storage", () => {
     expect(Effect.runSync(parseProduct(laptop, `${base}/product/31`))).toEqual({
       id: `${base}/product/31`,
       name: "Packard 255 G2",
       description: '15.6", AMD E2-3800 1.3GHz, 4GB, 500GB, Windows 8.1',
       colors: [],
-      variants: [
-        { key: "128", label: "128 GB", priceCents: 41699 },
-        { key: "256", label: "256 GB", priceCents: 43699 },
-        { key: "512", label: "512 GB", priceCents: 45699 },
+      priceCents: 41699,
+      selectedStorage: "128",
+      storage: [
+        { key: "128", label: "128 GB" },
+        { key: "256", label: "256 GB" },
+        { key: "512", label: "512 GB" },
       ],
     });
   });
@@ -37,8 +38,14 @@ describe("real source fixtures", () => {
       id: `${base}/product/1`,
       name: "Nokia 123",
       description: "7 day battery",
-      variants: [{ key: "base", priceCents: 2499 }],
-      colors: ["Black", "Gold", "White"],
+      priceCents: 2499,
+      selectedStorage: undefined,
+      storage: [],
+      colors: [
+        { key: "Gold", label: "Gold" },
+        { key: "White", label: "White" },
+        { key: "Black", label: "Black" },
+      ],
     });
   });
 
@@ -66,61 +73,53 @@ describe("real source fixtures", () => {
 });
 
 describe("synthetic storage availability", () => {
-  test("enabled 1024 GB retains numeric ordering and adds exactly $60", () => {
-    const html = laptop.replace('value="1024" disabled=""', 'value="1024"');
-    const catalog = Effect.runSync(
-      parseProduct(html, `${base}/product/31`).pipe(
-        Effect.flatMap((product) => buildCatalog([product])),
-      ),
-    );
+  test("new capacities are discovered without inventing their prices", () => {
+    const html = laptop
+      .replace('value="1024" disabled=""', 'value="2048"')
+      .replace(">1024</button>", ">2048</button>");
+    const snapshot = Effect.runSync(parseProduct(html, `${base}/product/31`));
 
-    expect(catalog).toEqual({
-      results: [
-        {
-          name: "Packard 255 G2 (128 GB)",
-          description: '15.6", AMD E2-3800 1.3GHz, 4GB, 500GB, Windows 8.1',
-          price: 416.99,
-        },
-        {
-          name: "Packard 255 G2 (256 GB)",
-          description: '15.6", AMD E2-3800 1.3GHz, 4GB, 500GB, Windows 8.1',
-          price: 436.99,
-        },
-        {
-          name: "Packard 255 G2 (512 GB)",
-          description: '15.6", AMD E2-3800 1.3GHz, 4GB, 500GB, Windows 8.1',
-          price: 456.99,
-        },
-        {
-          name: "Packard 255 G2 (1024 GB)",
-          description: '15.6", AMD E2-3800 1.3GHz, 4GB, 500GB, Windows 8.1',
-          price: 476.99,
-        },
-      ],
-      total: 1787.96,
-    });
+    expect(snapshot.storage.at(-1)).toEqual({ key: "2048", label: "2048 GB" });
+    expect(snapshot.priceCents).toBe(41699);
+    expect(snapshot).not.toHaveProperty("variants");
   });
 
-  test("one enabled storage option still gets its suffix and counts once", () => {
+  test("one enabled storage option is discovered with its label", () => {
     const html = laptop
       .replace('value="256"', 'value="256" disabled')
       .replace('value="512"', 'value="512" aria-disabled="true"');
-    const catalog = Effect.runSync(
-      parseProduct(html, `${base}/product/31`).pipe(
-        Effect.flatMap((product) => buildCatalog([product])),
-      ),
-    );
+    const snapshot = Effect.runSync(parseProduct(html, `${base}/product/31`));
 
-    expect(catalog).toEqual({
-      results: [
-        {
-          name: "Packard 255 G2 (128 GB)",
-          description: '15.6", AMD E2-3800 1.3GHz, 4GB, 500GB, Windows 8.1',
-          price: 416.99,
-        },
-      ],
-      total: 416.99,
-    });
+    expect(snapshot.storage).toEqual([{ key: "128", label: "128 GB" }]);
+    expect(snapshot.priceCents).toBe(41699);
+  });
+});
+
+describe("rendered USD precision", () => {
+  test.each([
+    ["517.1700000000001", 51717],
+    ["689.9899999999999", 68999],
+    ["0.30000000000000004", 30],
+  ] as const)("accepts floating-point display noise in $%s", (price, cents) => {
+    const html = laptop.replace("$416.99", `$${price}`);
+
+    expect(
+      Effect.runSync(parseProduct(html, `${base}/product/31`)).priceCents,
+    ).toBe(cents);
+  });
+
+  test.each([
+    "517.171",
+    "1.001",
+    "1.000000001",
+    "517.170000000000100001",
+    "9000000000000.001",
+  ])("rejects fractional cents or lossy decimal text in $%s", (price) => {
+    const html = laptop.replace("$416.99", `$${price}`);
+
+    expect(() =>
+      Effect.runSync(parseProduct(html, `${base}/product/31`)),
+    ).toThrow("Unsupported USD price");
   });
 });
 
@@ -176,7 +175,7 @@ describe("synthetic markup changes fail explicitly", () => {
     laptop.replace('class="description card-text"', 'class="renamed"'),
     laptop.replace("$416.99", "$416.999"),
     laptop.replace('content="USD"', 'content="EUR"'),
-    laptop.replace('value="256"', 'value="2048"'),
+    laptop.replace('value="256"', 'value=""'),
     laptop.replace('value="128"', 'value="256"'),
     laptop.replaceAll('class="btn swatch', 'disabled class="btn swatch'),
     phone.replace('aria-label="color"', 'aria-label="warranty"'),
@@ -194,7 +193,10 @@ describe("synthetic markup changes fail explicitly", () => {
 
     expect(
       Effect.runSync(parseProduct(changed, `${base}/product/1`)).colors,
-    ).toEqual(["Black", "Gold"]);
+    ).toEqual([
+      { key: "Gold", label: "Gold" },
+      { key: "Black", label: "Black" },
+    ]);
   });
 
   test("unexpected landing and non-product link cannot silently succeed", () => {

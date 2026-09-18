@@ -43,7 +43,7 @@ async function run(binary: string, args: string[], fixtureUrl?: string) {
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
-    timeout: 10_000,
+    timeout: 30_000,
     killSignal: "SIGKILL",
   });
   const [stdout, stderr, code] = await Promise.all([
@@ -209,7 +209,7 @@ try {
       stdin: "ignore",
       stdout: "inherit",
       stderr: "inherit",
-      timeout: 60_000,
+      timeout: 180_000,
       killSignal: "SIGKILL",
     },
   );

@@ -1,7 +1,6 @@
 import { load } from "cheerio";
 import { Data, Effect } from "effect";
-import { centsToNumber, parseMoney } from "./catalog";
-import type { SourceProduct, SourceVariant } from "./types";
+import { parseMoney } from "./catalog";
 
 export class ExtractionError extends Data.TaggedError("ExtractionError")<{
   readonly message: string;
@@ -9,6 +8,42 @@ export class ExtractionError extends Data.TaggedError("ExtractionError")<{
 }> {}
 
 const normalize = (text: string) => text.replace(/\s+/g, " ").trim();
+
+function normalizeDisplayedPrice(text: string) {
+  const decimal = text.replace(/^\$/, "");
+
+  if (!/^(0|[1-9]\d*)\.\d{3,}$/.test(decimal)) return text;
+
+  const amount = Number(decimal);
+  const rounded = amount.toFixed(2);
+  // Page arithmetic can display 497.17 + 20 as 517.1700000000001.
+  // Accept only a Number's own representation within floating-point noise of cents.
+  const tolerance = Math.min(1e-9, Math.abs(amount) * Number.EPSILON);
+
+  if (
+    String(amount) !== decimal ||
+    Math.abs(amount - Number(rounded)) > tolerance
+  )
+    return text;
+
+  return rounded;
+}
+
+export interface ProductChoice {
+  key: string;
+  label: string;
+}
+
+/** One observed page state. Unselected options have no inferred prices. */
+export interface ProductSnapshot {
+  id: string;
+  name: string;
+  description: string;
+  priceCents: number;
+  storage: ProductChoice[];
+  selectedStorage: string | undefined;
+  colors: ProductChoice[];
+}
 
 export function parseListing(
   html: string,
@@ -124,7 +159,8 @@ export function parseListing(
 export function parseProduct(
   html: string,
   url: string,
-): Effect.Effect<SourceProduct, ExtractionError> {
+  observedCurrency?: "USD",
+): Effect.Effect<ProductSnapshot, ExtractionError> {
   return Effect.gen(function* () {
     const invalid = (message: string) => new ExtractionError({ url, message });
     const $ = load(html);
@@ -147,12 +183,18 @@ export function parseProduct(
     const name = yield* requiredText("h4.title", "name");
     const description = yield* requiredText(".description", "description");
     const price = yield* parseMoney(
-      yield* requiredText("h4.price", "price"),
+      normalizeDisplayedPrice(yield* requiredText("h4.price", "price")),
     ).pipe(Effect.mapError((error) => invalid(error.message)));
 
     const currencies = wrapper.find('[itemprop="priceCurrency"]');
 
-    if (currencies.length !== 1 || currencies.attr("content") !== "USD")
+    // Some controls replace the price heading, removing its nested metadata.
+    // A browser reader may retain the currency validated earlier on this page.
+    if (
+      currencies.length > 1 ||
+      (currencies.length === 1 && currencies.attr("content") !== "USD") ||
+      (currencies.length === 0 && observedCurrency !== "USD")
+    )
       return yield* invalid(`Unsupported or missing currency: ${url}`);
 
     const identity = yield* Effect.try({
@@ -168,60 +210,60 @@ export function parseProduct(
     identity.pathname = identity.pathname.replace(/\/$/, "");
 
     const buttons = wrapper.find(".swatches button");
-    const variants: SourceVariant[] = [];
+    const storage: ProductChoice[] = [];
+    let selectedStorage: string | undefined;
 
     if (buttons.length > 0) {
-      if (normalize(wrapper.find("label.memory").text()) !== "HDD:")
+      if (
+        wrapper.find(".swatches").length !== 1 ||
+        normalize(wrapper.find("label.memory").text()) !== "HDD:"
+      )
         return yield* invalid(`Unknown configuration control: ${url}`);
 
-      if (
-        buttons.filter(".active").length !== 1 ||
-        buttons.filter(".active").attr("value") !== "128"
-      ) {
-        return yield* invalid(`Unverified initial storage selection: ${url}`);
-      }
+      if (buttons.filter(".active").length !== 1)
+        return yield* invalid(`Missing or ambiguous storage selection: ${url}`);
 
-      // First-party EcommerceProduct.updatePrice; browser-verified in docs/source-behavior.md.
-      const additions: Record<string, number> = {
-        "128": 0,
-        "256": 2000,
-        "512": 4000,
-        "1024": 6000,
-      };
+      selectedStorage = buttons.filter(".active").attr("value");
+      const keys = new Set<string>();
 
       for (const element of buttons) {
         const button = $(element);
         const key = button.attr("value") ?? "";
-        const addition = Object.hasOwn(additions, key)
-          ? additions[key]
-          : undefined;
+        const text = normalize(button.text());
 
-        if (addition === undefined || normalize(button.text()) !== key)
+        if (!key || !text || keys.has(key))
           return yield* invalid(
-            `Unknown storage option ${JSON.stringify(key)}: ${url}`,
+            `Missing or duplicate storage option ${JSON.stringify(key)}: ${url}`,
           );
+
+        keys.add(key);
 
         if (button.is(":disabled") || button.attr("aria-disabled") === "true")
           continue;
 
-        const priceCents = price + addition;
-        yield* centsToNumber(priceCents).pipe(
-          Effect.mapError((error) => invalid(error.message)),
-        );
-
-        variants.push({ key, label: `${key} GB`, priceCents });
+        storage.push({ key, label: /^\d+$/.test(text) ? `${text} GB` : text });
       }
 
-      if (variants.length === 0)
+      if (storage.length === 0)
         return yield* invalid(`No enabled storage options: ${url}`);
+
+      if (!storage.some((choice) => choice.key === selectedStorage))
+        return yield* invalid(`Selected storage is not enabled: ${url}`);
     } else {
       if (wrapper.find(".swatches, label.memory").length)
         return yield* invalid(`Missing storage buttons: ${url}`);
-
-      variants.push({ key: "base", priceCents: price });
     }
 
-    const colors: string[] = [];
+    if (
+      wrapper.find(
+        'input:not([type="hidden"]), textarea, [role="combobox"], [role="radio"], [role="checkbox"]',
+      ).length ||
+      wrapper.find("button").length !== buttons.length ||
+      wrapper.find("select").length > 1
+    )
+      return yield* invalid(`Unknown selectable option: ${url}`);
+
+    const colors = new Map<string, ProductChoice>();
 
     for (const element of wrapper.find(".dropdown")) {
       const select = $(element).children("select");
@@ -235,7 +277,8 @@ export function parseProduct(
 
       if (
         select.attr("aria-label")?.toLowerCase() !== "color" ||
-        !select.parent().is(".dropdown")
+        !select.parent().is(".dropdown") ||
+        select.is("[multiple]")
       )
         return yield* invalid(`Unknown selectable option: ${url}`);
 
@@ -244,22 +287,37 @@ export function parseProduct(
       for (const optionElement of select.find("option")) {
         const option = $(optionElement);
 
-        if (option.is(":disabled") || option.attr("value") === "") continue;
+        if (
+          option.is(":disabled") ||
+          option.closest("optgroup[disabled]").length ||
+          option.attr("aria-disabled") === "true" ||
+          option.attr("value") === ""
+        )
+          continue;
 
         const text = normalize(option.text());
+        const key = option.attr("value") ?? option.text().trim();
 
-        if (!text) return yield* invalid(`Empty color option: ${url}`);
+        if (!text || !key) return yield* invalid(`Empty color option: ${url}`);
 
-        colors.push(text);
+        if (colors.has(key) && colors.get(key)?.label !== text)
+          return yield* invalid(`Conflicting color option: ${url}`);
+
+        colors.set(key, { key, label: text });
       }
+
+      if (!colors.size)
+        return yield* invalid(`No enabled color options: ${url}`);
     }
 
     return {
       id: identity.href,
       name,
       description,
-      variants,
-      colors: [...new Set(colors)].sort(),
+      priceCents: price,
+      storage,
+      selectedStorage,
+      colors: [...colors.values()],
     };
   });
 }

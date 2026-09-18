@@ -1,7 +1,8 @@
 import { Data, Effect } from "effect";
 import { buildCatalog, type CatalogError } from "./catalog.js";
 import { type RequestFailure, requestHtml } from "./http.js";
-import { type ExtractionError, parseListing, parseProduct } from "./site.js";
+import { createProductReader, type ProductReader } from "./product-browser.js";
+import { type ExtractionError, parseListing } from "./site.js";
 import type { Catalog, Progress, SourceProduct } from "./types.js";
 
 export const TARGET_URL = "https://webscraper.io/test-sites/e-commerce/static";
@@ -16,6 +17,8 @@ export interface CrawlOptions {
   /** Internal test seam; intentionally absent from the CLI. */
   baseUrl?: string;
   fetch?: FetchFunction;
+  /** Internal test seam for transport/CLI tests; production always uses a browser. */
+  readProduct?: ProductReader;
   concurrency?: number;
   requestTimeoutMs?: number;
   runTimeoutMs?: number;
@@ -47,7 +50,7 @@ export function crawl(
   return Effect.gen(function* () {
     const concurrency = options.concurrency ?? 2;
     const requestTimeoutMs = options.requestTimeoutMs ?? 15_000;
-    const runTimeoutMs = options.runTimeoutMs ?? 300_000;
+    const runTimeoutMs = options.runTimeoutMs ?? 600_000;
     const retries = options.retries ?? 2;
     const retryDelayMs = options.retryDelayMs ?? 500;
     const maxPages = options.maxPages ?? 10_000;
@@ -164,7 +167,7 @@ export function crawl(
         progress.discoveredProducts = productUrls.size;
       });
 
-    const batch = <E>(
+    const visitAll = <E>(
       urls: string[],
       consume: (html: string, url: string) => Effect.Effect<void, E>,
     ) =>
@@ -173,6 +176,8 @@ export function crawl(
         (url) =>
           Effect.gen(function* () {
             yield* Effect.sync(() => {
+              if (progress.phase === "scraping") progress.queued--;
+
               progress.active++;
               emit();
             });
@@ -196,7 +201,7 @@ export function crawl(
         const urls = listings.splice(0, concurrency);
         progress.queued = listings.length;
 
-        yield* batch(urls, (html, url) =>
+        yield* visitAll(urls, (html, url) =>
           Effect.gen(function* () {
             const found = yield* parseListing(html, url);
 
@@ -217,18 +222,21 @@ export function crawl(
 
       progress.phase = "scraping";
       const pending = [...productUrls].sort();
+      const readProduct =
+        options.readProduct ??
+        (yield* createProductReader({
+          canonical,
+          timeoutMs: requestTimeoutMs,
+        }));
 
-      while (pending.length) {
-        const urls = pending.splice(0, concurrency);
-        progress.queued = pending.length;
+      progress.queued = pending.length;
 
-        yield* batch(urls, (html, url) =>
-          Effect.gen(function* () {
-            products.push(yield* parseProduct(html, url));
-            progress.processedProducts++;
-          }),
-        );
-      }
+      yield* visitAll(pending, (html, url) =>
+        Effect.gen(function* () {
+          products.push(yield* readProduct(html, url));
+          progress.processedProducts++;
+        }),
+      );
 
       const catalog = yield* buildCatalog(products);
 
@@ -240,11 +248,12 @@ export function crawl(
     });
 
     return yield* run.pipe(
+      Effect.scoped,
       Effect.timeoutOrElse({
         duration: runTimeoutMs,
         orElse: () =>
           new CrawlFailure({
-            message: `Crawl deadline exceeded after ${runTimeoutMs}ms; retry when the source is responsive`,
+            message: `Crawl deadline exceeded after ${runTimeoutMs}ms while ${progress.phase}: ${progress.processedProducts}/${progress.discoveredProducts} products completed; no partial results were produced`,
           }),
       }),
     );

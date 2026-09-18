@@ -110,15 +110,21 @@ export function buildCatalog(
         const label =
           variant.label &&
           normalize(variant.label).replace(/^(\d+)\s*GB$/i, "$1 GB");
+        const variantName = variant.name ?? product.name;
+        const variantColors = variant.colors
+          ? [...new Set(variant.colors.map(normalize).filter(Boolean))].sort(
+              compare,
+            )
+          : colors;
         const name =
-          label && !product.name.endsWith(` (${label})`)
-            ? `${product.name} (${label})`
-            : product.name;
+          label && !variantName.endsWith(` (${label})`)
+            ? `${variantName} (${label})`
+            : variantName;
         const item: ResultItem = {
           name,
-          description: product.description,
+          description: variant.description ?? product.description,
           price: yield* centsToNumber(variant.priceCents),
-          ...(colors.length >= 2 ? { colors } : {}),
+          ...(variantColors.length >= 2 ? { colors: variantColors } : {}),
         };
 
         const identity = JSON.stringify([product.id, variant.key]);

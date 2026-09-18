@@ -35,10 +35,22 @@ jobs:
       - uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version-file: .bun-version
+      - uses: browser-actions/setup-chrome@v2.2.0
+        id: chrome
+        with:
+          # Chrome for Testing has no Windows arm64 stable channel.
+          chrome-version: ${{ matrix.platform == 'windows-arm64' && 'latest' || 'stable' }}
+          install-dependencies: true
       - run: bun install --frozen-lockfile
       - run: bun run check
+        env:
+          BUN_CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - run: bun run test:terminal
+        env:
+          BUN_CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - run: bun run test:binary
+        env:
+          BUN_CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - run: bun run build
       - uses: actions/upload-artifact@v7.0.1
         with:

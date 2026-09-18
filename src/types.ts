@@ -2,6 +2,9 @@ export interface SourceVariant {
   key: string;
   label?: string;
   priceCents: number;
+  name?: string;
+  description?: string;
+  colors?: string[];
 }
 
 export interface SourceProduct {

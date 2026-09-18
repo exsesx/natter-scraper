@@ -1,16 +1,21 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Effect, Exit } from "effect";
+import { Cause, Deferred, Effect, Exit } from "effect";
 import {
   type CrawlOptions,
   crawl as crawlEffect,
   type FetchFunction,
 } from "../src/crawl";
+import { ExtractionError } from "../src/site";
 import type { Progress } from "../src/types";
+import { staticProduct } from "./helpers/static-product";
 
 const crawl = (options: CrawlOptions & { signal?: AbortSignal }) => {
   const { signal, ...config } = options;
 
-  return Effect.runPromise(crawlEffect(config), { signal });
+  return Effect.runPromise(
+    crawlEffect({ readProduct: staticProduct, ...config }),
+    { signal },
+  );
 };
 
 const baseUrl = "https://fixture.test/catalog";
@@ -38,6 +43,128 @@ function hanging(signal: AbortSignal): Promise<Response> {
 }
 
 describe("bounded catalog traversal", () => {
+  test("starts the next product while another reader is still busy", async () => {
+    const thirdStarted = Deferred.makeUnsafe<void>();
+    const started: string[] = [];
+    const completed: string[] = [];
+    const progress: Progress[] = [];
+    let active = 0;
+    let maximum = 0;
+
+    const result = await crawl({
+      baseUrl,
+      concurrency: 2,
+      runTimeoutMs: 500,
+      fetch: async (url) =>
+        url === baseUrl
+          ? html(listing([1, 2, 3].map((id) => `${baseUrl}/product/${id}`)))
+          : html(product(url)),
+      onProgress: (value) => progress.push(value),
+      readProduct: (body, url) =>
+        Effect.gen(function* () {
+          started.push(url);
+          active++;
+          maximum = Math.max(maximum, active);
+
+          if (url.endsWith("/1")) yield* Deferred.await(thirdStarted);
+          if (url.endsWith("/3"))
+            yield* Deferred.succeed(thirdStarted, undefined);
+
+          const source = yield* staticProduct(body, url);
+          completed.push(url);
+
+          return source;
+        }).pipe(Effect.ensuring(Effect.sync(() => active--))),
+    });
+
+    expect(started).toEqual([1, 2, 3].map((id) => `${baseUrl}/product/${id}`));
+    expect(completed[0]).toBe(`${baseUrl}/product/2`);
+    expect(maximum).toBe(2);
+    expect(active).toBe(0);
+    expect(result.catalog.results).toHaveLength(3);
+    expect(result.catalog.total).toBe(3.69);
+    expect(progress.at(-1)).toMatchObject({
+      active: 0,
+      queued: 0,
+      processedProducts: 3,
+    });
+    expect(
+      progress
+        .filter((value) => value.phase === "scraping")
+        .every(
+          (value) =>
+            value.active <= 2 &&
+            value.queued >= 0 &&
+            value.active + value.queued + value.processedProducts === 3,
+        ),
+    ).toBe(true);
+  });
+
+  test("reader failure interrupts active readers before starting queued products", async () => {
+    const firstStarted = Deferred.makeUnsafe<void>();
+    const started: string[] = [];
+    let cleaned = false;
+
+    await expect(
+      crawl({
+        baseUrl,
+        concurrency: 2,
+        fetch: async (url) =>
+          url === baseUrl
+            ? html(listing([1, 2, 3].map((id) => `${baseUrl}/product/${id}`)))
+            : html(product(url)),
+        readProduct: (_body, url) =>
+          Effect.gen(function* () {
+            started.push(url);
+
+            if (url.endsWith("/1")) {
+              yield* Deferred.succeed(firstStarted, undefined);
+
+              return yield* Effect.never.pipe(
+                Effect.ensuring(
+                  Effect.sync(() => {
+                    cleaned = true;
+                  }),
+                ),
+              );
+            }
+
+            yield* Deferred.await(firstStarted);
+
+            return yield* new ExtractionError({
+              url,
+              message: "Failed product observation",
+            });
+          }),
+      }),
+    ).rejects.toThrow("Failed product observation");
+    expect(started).toEqual([1, 2].map((id) => `${baseUrl}/product/${id}`));
+    expect(cleaned).toBe(true);
+  });
+
+  test("crawl deadline interrupts product observation and reports incomplete progress", async () => {
+    let cleaned = false;
+
+    await expect(
+      crawl({
+        baseUrl,
+        fetch: basic,
+        runTimeoutMs: 50,
+        readProduct: () =>
+          Effect.never.pipe(
+            Effect.ensuring(
+              Effect.sync(() => {
+                cleaned = true;
+              }),
+            ),
+          ),
+      }),
+    ).rejects.toThrow(
+      "while scraping: 0/1 products completed; no partial results were produced",
+    );
+    expect(cleaned).toBe(true);
+  });
+
   test("local HTTP catalog follows pagination, deduplicates canonical links and retains equal-price products", async () => {
     const requests: string[] = [];
     let active = 0;

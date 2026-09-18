@@ -94,6 +94,7 @@ export function createProductReader(options: BrowserOptions) {
 
           try {
             const bounded = async <A>(
+              name: string,
               operation: () => Promise<A>,
             ): Promise<A> => {
               let timedOut = false;
@@ -107,7 +108,7 @@ export function createProductReader(options: BrowserOptions) {
               } catch (cause) {
                 if (timedOut)
                   throw new Error(
-                    `Browser operation timed out after ${options.timeoutMs}ms`,
+                    `Browser operation timed out after ${options.timeoutMs}ms during ${name}`,
                   );
 
                 throw cause;
@@ -116,7 +117,10 @@ export function createProductReader(options: BrowserOptions) {
               }
             };
 
-            if (!available) await bounded(() => view.navigate("about:blank"));
+            if (!available)
+              await bounded("initial browser navigation", () =>
+                view.navigate("about:blank"),
+              );
 
             // WebView permits one CDP call at a time. Network handlers share this queue.
             let commands: Promise<unknown> = Promise.resolve();
@@ -125,7 +129,7 @@ export function createProductReader(options: BrowserOptions) {
               params: Record<string, unknown> = {},
             ) => {
               const result = commands.then(() =>
-                bounded(() => view.cdp(method, params)),
+                bounded(`CDP ${method}`, () => view.cdp(method, params)),
               );
               commands = result.catch(() => {});
 
@@ -255,7 +259,7 @@ export function createProductReader(options: BrowserOptions) {
             });
 
             const readState = async (): Promise<PageState> =>
-              (await bounded(() =>
+              (await bounded("snapshot evaluation", () =>
                 view.evaluate(`(() => {
           const elements = document.querySelectorAll(${JSON.stringify(wrapper)});
           const element = elements[0];
@@ -309,20 +313,22 @@ export function createProductReader(options: BrowserOptions) {
             };
             const reset = async () => {
               observedCurrency = undefined;
-              await bounded(() => view.navigate(url));
+              await bounded("product navigation", () => view.navigate(url));
 
               return (await snapshot()).product;
             };
             const selectStorage = async (key: string) => {
-              const selector = (await bounded(() =>
-                view.evaluate(
-                  `${JSON.stringify(storageSelector)} + '[value="' + CSS.escape(${JSON.stringify(key)}) + '"]'`,
-                ),
+              const selector = (await bounded(
+                "storage selector evaluation",
+                () =>
+                  view.evaluate(
+                    `${JSON.stringify(storageSelector)} + '[value="' + CSS.escape(${JSON.stringify(key)}) + '"]'`,
+                  ),
               )) as string;
-              await bounded(() =>
+              await bounded("storage scrolling", () =>
                 view.scrollTo(selector, { timeout: options.timeoutMs }),
               );
-              await bounded(() =>
+              await bounded("storage selection", () =>
                 view.click(selector, { timeout: options.timeoutMs }),
               );
               const observed = (await snapshot()).product;
@@ -384,7 +390,7 @@ export function createProductReader(options: BrowserOptions) {
 
                 // Native <select> has no WebView selectOption API. Apply its DOM selection
                 // and dispatch the standard input/change events, then verify rendered output.
-                await bounded(() =>
+                await bounded("color selection", () =>
                   view.evaluate(`(() => {
               const select = document.querySelector(${JSON.stringify(colorSelector)});
               select.value = ${JSON.stringify(color.key)};
@@ -445,7 +451,9 @@ export function createProductReader(options: BrowserOptions) {
             };
 
             // End this document and its timers before another product leases the view.
-            await bounded(() => view.navigate("about:blank"));
+            await bounded("cleanup navigation", () =>
+              view.navigate("about:blank"),
+            );
             await cdp("Fetch.disable");
             await cdp("Network.disable");
             await cdp("Runtime.disable");

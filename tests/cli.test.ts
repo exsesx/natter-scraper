@@ -91,7 +91,7 @@ describe("CLI subprocess contract", () => {
   test("redirected streams exit automatically with one exact catalog", async () => {
     const result = await run([]);
 
-    expect(result.code).toBe(0);
+    expect(result.code, result.stderr).toBe(0);
     expect(result.stdout).toBe(`${JSON.stringify(expected)}\n`);
     expect(result.stdout).not.toContain("\u001b");
     expect(result.stderr).toContain("3 products, 4 results");
@@ -107,7 +107,7 @@ describe("CLI subprocess contract", () => {
     async ({ args }) => {
       const result = await run(args);
 
-      expect(result.code).toBe(0);
+      expect(result.code, result.stderr).toBe(0);
       expect(result.stdout).toBe(`${JSON.stringify(expected)}\n`);
       expect(result.stderr).toContain("3 products, 4 results");
       expect(result.stderr).not.toContain("\u001b[?1049h");
@@ -117,7 +117,7 @@ describe("CLI subprocess contract", () => {
   test("pretty stdout and explicit opt-out retain the same catalog", async () => {
     const result = await run(["--pretty", "--output", "-", "--no-interactive"]);
 
-    expect(result.code).toBe(0);
+    expect(result.code, result.stderr).toBe(0);
     expect(result.stdout).toBe(`${JSON.stringify(expected, null, 2)}\n`);
   });
 
@@ -130,7 +130,7 @@ describe("CLI subprocess contract", () => {
     async ({ args, pretty }) => {
       const result = await run(args);
 
-      expect(result.code).toBe(0);
+      expect(result.code, result.stderr).toBe(0);
       expect(result.stdout).toBe(
         `${JSON.stringify(expected, null, pretty ? 2 : undefined)}\n`,
       );
@@ -144,7 +144,7 @@ describe("CLI subprocess contract", () => {
       const path = join(directory, `pretty.${extension}`);
       const result = await run(["--output", path, "--pretty"]);
 
-      expect(result.code).toBe(0);
+      expect(result.code, result.stderr).toBe(0);
       expect(result.stdout).toBe("");
       expect(await readFile(path, "utf8")).toBe(
         `${JSON.stringify(expected, null, 2)}\n`,
@@ -158,7 +158,7 @@ describe("CLI subprocess contract", () => {
       const path = join(directory, filename);
       const result = await run(["--format", "json", "--output", path]);
 
-      expect(result.code).toBe(0);
+      expect(result.code, result.stderr).toBe(0);
       expect(result.stdout).toBe("");
       expect(await readFile(path, "utf8")).toBe(
         `${JSON.stringify(expected)}\n`,
@@ -182,7 +182,7 @@ describe("CLI subprocess contract", () => {
     async ({ format, expected }) => {
       const result = await run(["--format", format]);
 
-      expect(result.code).toBe(0);
+      expect(result.code, result.stderr).toBe(0);
       expect(result.stdout).toBe(expected);
       expect(result.stderr).toContain("$270.18");
       expect(result.stderr).not.toContain("copy");
@@ -190,14 +190,14 @@ describe("CLI subprocess contract", () => {
       const path = join(directory, `products.${format}`);
       const saved = await run(["--format", format, "--output", path]);
 
-      expect(saved.code).toBe(0);
+      expect(saved.code, saved.stderr).toBe(0);
       expect(saved.stdout).toBe("");
       expect(await readFile(path, "utf8")).toBe(expected);
 
       const inferredPath = join(directory, `inferred.${format.toUpperCase()}`);
       const inferred = await run(["--output", inferredPath, "--no-pretty"]);
 
-      expect(inferred.code).toBe(0);
+      expect(inferred.code, inferred.stderr).toBe(0);
       expect(inferred.stdout).toBe("");
       expect(await readFile(inferredPath, "utf8")).toBe(expected);
     },
@@ -221,7 +221,7 @@ describe("CLI subprocess contract", () => {
 
     const result = await run(["--output", path]);
 
-    expect(result.code).toBe(0);
+    expect(result.code, result.stderr).toBe(0);
     expect(result.stdout).toBe("");
     expect(JSON.parse(await readFile(path, "utf8"))).toEqual(expected);
     expect(
@@ -283,7 +283,7 @@ describe("CLI subprocess contract", () => {
   test("version exits without starting a crawl or writing to stderr", async () => {
     const result = await run(["--version"], "failure");
 
-    expect(result.code).toBe(0);
+    expect(result.code, result.stderr).toBe(0);
     expect(result.stdout.trim()).toBe("natter-scraper v0.1.0");
     expect(result.stderr).toBe("");
     expect(result.requests).toBe(0);
@@ -292,7 +292,7 @@ describe("CLI subprocess contract", () => {
   test("help describes streams and keys without starting a crawl", async () => {
     const result = await run(["--help"], "failure");
 
-    expect(result.code).toBe(0);
+    expect(result.code, result.stderr).toBe(0);
     expect(result.stdout).toContain("--no-interactive");
     expect(result.stdout).toContain("-i / --interactive");
     expect(result.stdout).toContain("--output FILE saves and exits");

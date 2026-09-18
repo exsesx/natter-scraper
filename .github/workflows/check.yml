@@ -37,7 +37,7 @@ jobs:
           # On macOS, the version installer preserves the .app bundle
           # that the channel installer strips.
           chrome-version: ${{ startsWith(matrix.platform, 'darwin-') && '153.0.8010.52' || 'stable' }}
-          install-dependencies: true
+          install-dependencies: ${{ runner.os == 'Linux' }}
       - name: Configure Chrome sandbox on Linux
         if: runner.os == 'Linux'
         shell: bash

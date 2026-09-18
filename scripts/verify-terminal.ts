@@ -7,6 +7,8 @@ import { stripVTControlCharacters } from "node:util";
 const root = resolve(import.meta.dir, "..");
 const windows = process.platform === "win32";
 const compiledFixture = process.env.NATTER_TERMINAL_CLI;
+// Allow the fixture's 30-second crawl deadline plus startup and cleanup.
+const crawlCompletionTimeoutMs = 45_000;
 
 if (compiledFixture && !isAbsolute(compiledFixture)) {
   throw new Error("NATTER_TERMINAL_CLI must be an absolute executable path");
@@ -39,8 +41,8 @@ async function terminalSession(
     ): Bun.Subprocess;
     write(text: string): void;
     resize(columns: number, rows: number): void;
-    waitFor(marker: string, from?: number): Promise<void>;
-    waitForExit(expected: number): Promise<void>;
+    waitFor(marker: string, from?: number, timeoutMs?: number): Promise<void>;
+    waitForExit(expected: number, timeoutMs?: number): Promise<void>;
     output(): string;
   }) => Promise<void>,
 ) {
@@ -72,7 +74,7 @@ async function terminalSession(
 
     return child;
   };
-  const waitForExit = async (expected: number) => {
+  const waitForExit = async (expected: number, timeoutMs = 10_000) => {
     assert(child, "No terminal child");
 
     const active = child;
@@ -85,7 +87,7 @@ async function terminalSession(
           timer = setTimeout(() => {
             active.kill("SIGKILL");
             reject(new Error(`Terminal child did not exit: ${output}`));
-          }, 10_000);
+          }, timeoutMs);
         }),
       ]);
 
@@ -123,8 +125,8 @@ async function terminalSession(
         // Deliver the POSIX resize notification explicitly for this reusable PTY.
         if (!windows && child?.exitCode === null) child.kill("SIGWINCH");
       },
-      async waitFor(marker, from = 0) {
-        const deadline = Date.now() + 15_000;
+      async waitFor(marker, from = 0, timeoutMs = 15_000) {
+        const deadline = Date.now() + timeoutMs;
 
         while (Date.now() < deadline) {
           if (visible(output.slice(from)).includes(marker)) return;
@@ -210,7 +212,7 @@ function finalSummary(output: string, prefix = "Completed:") {
 async function browserNavigation(directory: string) {
   await terminalSession(async (session) => {
     startFixture(session, [], {}, directory);
-    await session.waitFor("Catalog complete");
+    await session.waitFor("Catalog complete", 0, crawlCompletionTimeoutMs);
     await session.waitFor("Fixture Laptop");
 
     assert(
@@ -341,7 +343,7 @@ async function setSavePath(session: Session, path: string) {
 async function browserSaves(directory: string) {
   await terminalSession(async (session) => {
     startFixture(session, [], {}, directory);
-    await session.waitFor("Catalog complete");
+    await session.waitFor("Catalog complete", 0, crawlCompletionTimeoutMs);
     await press(session, "s", "Save catalog");
     await setSavePath(session, "saved catalog.json");
     await press(session, keys.enter, "Fixture Laptop");
@@ -481,11 +483,13 @@ async function browserLoads(directory: string) {
     );
 
     await press(session, "s", "Save catalog");
-    await setSavePath(session, "reopened-copy.json");
+    await setSavePath(session, "reopened-products-0s.json");
     await press(session, keys.enter, "Saved phone");
 
     assert.deepEqual(
-      JSON.parse(await readFile(join(directory, "reopened-copy.json"), "utf8")),
+      JSON.parse(
+        await readFile(join(directory, "reopened-products-0s.json"), "utf8"),
+      ),
       catalog,
     );
     assert.equal(await readFile(input, "utf8"), original);
@@ -495,8 +499,8 @@ async function browserLoads(directory: string) {
 
     const summary = finalSummary(session.output(), "Loaded:");
 
-    assert(summary.includes("reopened-copy.json"), summary);
-    assert.doesNotMatch(summary, /products|\d+(?:\.\d+)?s\b/);
+    assert(summary.includes("reopened-products-0s.json"), summary);
+    assert(summary.startsWith("Loaded: 2 results, $18.00; saved "), summary);
   });
   console.log(
     "PASS saved catalog opens without crawling, navigates, preserves input, and confirms replacement",
@@ -547,6 +551,8 @@ async function terminalCase(
     if (options.action || options.signal) {
       await session.waitFor(
         options.slow ? "Discovering catalog" : "Catalog complete",
+        0,
+        options.slow ? undefined : crawlCompletionTimeoutMs,
       );
       session.resize(42, 18);
 
@@ -554,7 +560,10 @@ async function terminalCase(
       else if (options.action) session.write(options.action);
     }
 
-    await session.waitForExit(options.expected ?? 0);
+    await session.waitForExit(
+      options.expected ?? 0,
+      options.action || options.signal ? undefined : crawlCompletionTimeoutMs,
+    );
 
     const output = session.output();
     const text = visible(output);

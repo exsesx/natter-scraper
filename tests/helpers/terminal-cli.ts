@@ -35,6 +35,7 @@ try {
         return crawl({
           ...options,
           baseUrl: `http://127.0.0.1:${server.port}${fixturePrefix}`,
+          runTimeoutMs: 30_000,
         });
       },
     }),

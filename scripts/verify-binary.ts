@@ -49,7 +49,8 @@ async function run(
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
-    timeout: 30_000,
+    // Let the fixture's 30-second crawl deadline finish cleanup and report errors.
+    timeout: 45_000,
     killSignal: "SIGKILL",
   });
   const [stdout, stderr, code] = await Promise.all([

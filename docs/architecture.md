@@ -39,6 +39,8 @@ The first implementation calculated storage prices with a formula copied from th
 
 The headless extraction browser is separate from the Ink terminal browser below. It uses an ephemeral Chrome backend with `BackForwardCache` disabled and never attaches to a user's browser. The product reader owns its views through the crawl's Effect scope, a lifetime that guarantees registered cleanup runs when the crawl ends. A successful read navigates to a blank document to end scripts and timers, disables interception and Network/Runtime event streams, and removes listeners before returning the view to the pool. Before loading the next product, a temporary new-document hook clears `sessionStorage` and `window.name` after the previous document's unload handlers and before the new product's scripts. The hook is removed after the initial observation, so storage-choice reloads retain that product's tab-local state. Failed or cancelled reads close their views; leaving the crawl scope closes all remaining views. Browser operations and observations have timeouts; the ten-minute crawl deadline includes them and reports incomplete progress on failure. See [source behavior](source-behavior.md) for the supported control shapes and observation limits.
 
+If preparing a completed browser view for reuse fails, the reader closes and discards that view while keeping the validated product. It still checks recorded page/network errors and cancellation before returning. The next product creates a fresh view when none is idle.
+
 File output writes and closes a temporary sibling before publication:
 
 - Initial CLI output and confirmed browser replacement use atomic rename.

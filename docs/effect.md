@@ -32,6 +32,8 @@ Each attempt owns an abort controller. The response scope owns both the response
 
 `createProductReader` requires an Effect scope and registers a finalizer that closes its owned views. Each product read runs in `Effect.tryPromise` and leases an idle view or creates one. A successful read ends the document and detaches its listeners before returning the view for reuse. A temporary new-document script clears tab-local state before the next product's scripts run, and the adapter removes that script before storage-choice reloads. The callback's abort signal and operation timeouts close the active view; failed reads discard it. The crawl scope closes all remaining views on every exit path. The adapter never attaches to the user's running browser or calls the process-wide `closeAll()` API. Each storage choice is observed afresh; there is no inferred price table.
 
+Once all observations have succeeded, a failure preparing the view for reuse closes and discards it without losing the validated product. Recorded source errors and interruption still fail the read.
+
 ```mermaid
 sequenceDiagram
     participant Run as Crawl

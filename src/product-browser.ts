@@ -450,17 +450,26 @@ export function createProductReader(options: BrowserOptions) {
               colors: [],
             };
 
-            // End this document and its timers before another product leases the view.
-            await bounded("cleanup navigation", () =>
-              view.navigate("about:blank"),
-            );
-            await cdp("Fetch.disable");
-            await cdp("Network.disable");
-            await cdp("Runtime.disable");
-
             if (problem) throw problem;
 
-            reusable = true;
+            try {
+              // End this document and its timers before another product leases the view.
+              await bounded("cleanup navigation", () =>
+                view.navigate("about:blank"),
+              );
+              await cdp("Fetch.disable");
+              await cdp("Network.disable");
+              await cdp("Runtime.disable");
+
+              if (problem) throw problem;
+
+              reusable = true;
+            } catch (cause) {
+              if (signal.aborted || closed) throw cause;
+              if (problem) throw problem;
+
+              // Observations are complete. Discard a view that cannot be reused.
+            }
 
             return product;
           } finally {

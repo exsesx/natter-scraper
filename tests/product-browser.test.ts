@@ -186,6 +186,109 @@ describe("browser-observed product configurations", () => {
     }
   });
 
+  test.each(["rejection", "timeout"] as const)(
+    "cleanup %s preserves the observed product and discards the view",
+    async (failure) => {
+      const views = new Set<Bun.WebView>();
+      const loaded = new Set<Bun.WebView>();
+      const navigate = Bun.WebView.prototype.navigate;
+      let discarded: Bun.WebView | undefined;
+      const observed = spyOn(
+        Bun.WebView.prototype,
+        "navigate",
+      ).mockImplementation(function (this: Bun.WebView, destination: string) {
+        views.add(this);
+
+        if (destination !== "about:blank") loaded.add(this);
+        else if (loaded.has(this) && !discarded) {
+          discarded = this;
+
+          // A real pending operation rejects when the timeout closes the view.
+          return failure === "timeout"
+            ? this.evaluate("new Promise(() => {})").then(() => {})
+            : Promise.reject(new Error("Synthetic cleanup rejection"));
+        }
+
+        return navigate.call(this, destination);
+      });
+
+      try {
+        const catalogs = await Effect.runPromise(
+          Effect.gen(function* () {
+            const readProduct = yield* createProductReader({
+              canonical: (raw) => (raw === url ? raw : undefined),
+              timeoutMs: 15_000,
+            });
+            const first = yield* readProduct(product(), url);
+
+            expect(discarded).toBeDefined();
+            expect(() => discarded?.evaluate("document.title")).toThrow();
+
+            const second = yield* readProduct(product(), url);
+
+            return yield* Effect.all([
+              buildCatalog([first]),
+              buildCatalog([second]),
+            ]);
+          }).pipe(Effect.scoped),
+        );
+
+        expect(catalogs[0]).toEqual(catalogs[1]);
+        expect(catalogs[0]?.total).toBe(10.11);
+        expect(views.size).toBe(2);
+
+        for (const view of views)
+          expect(() => view.evaluate("document.title")).toThrow();
+      } finally {
+        observed.mockRestore();
+      }
+    },
+  );
+
+  test.each(["cancellation", "source error"] as const)(
+    "%s during cleanup still rejects the product",
+    async (failure) => {
+      const controller = new AbortController();
+      const navigate = Bun.WebView.prototype.navigate;
+      let loaded = false;
+      let cleanupView: Bun.WebView | undefined;
+      const observed = spyOn(
+        Bun.WebView.prototype,
+        "navigate",
+      ).mockImplementation(function (this: Bun.WebView, destination: string) {
+        if (destination !== "about:blank") loaded = true;
+        else if (loaded) {
+          cleanupView = this;
+
+          if (failure === "cancellation") controller.abort();
+          else
+            this.dispatchEvent(
+              Object.assign(new Event("Runtime.exceptionThrown"), {
+                data: { exceptionDetails: { text: "Source cleanup failure" } },
+              }),
+            );
+
+          return Promise.reject(new Error("Synthetic cleanup rejection"));
+        }
+
+        return navigate.call(this, destination);
+      });
+
+      try {
+        const pending = read(product(), controller.signal);
+
+        if (failure === "source error")
+          await expect(pending).rejects.toThrow("Source cleanup failure");
+        else await expect(pending).rejects.toThrow();
+
+        expect(cleanupView).toBeDefined();
+        expect(() => cleanupView?.evaluate("document.title")).toThrow();
+      } finally {
+        observed.mockRestore();
+      }
+    },
+  );
+
   test("reused views require fresh currency evidence and recover after a failed product", async () => {
     const outcomes = await Effect.runPromise(
       Effect.gen(function* () {

@@ -41,6 +41,33 @@ jobs:
           # Chrome for Testing has no Windows arm64 stable channel.
           chrome-version: ${{ matrix.platform == 'windows-arm64' && 'latest' || 'stable' }}
           install-dependencies: true
+      - name: Configure Chrome sandbox on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          BUN_CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          # Ubuntu restricts user namespaces for downloaded Chrome binaries.
+          # Record the original startup result, then allow only this executable.
+          timeout 15s "$BUN_CHROME_PATH" --headless --disable-gpu --dump-dom about:blank || true
+          chrome_executable=$(readlink -f "$BUN_CHROME_PATH")
+          sudo tee /etc/apparmor.d/natter-ci-chrome > /dev/null <<EOF
+          abi <abi/4.0>,
+          include <tunables/global>
+          profile natter-ci-chrome "$chrome_executable" flags=(unconfined) {
+            userns,
+          }
+          EOF
+          sudo apparmor_parser --replace /etc/apparmor.d/natter-ci-chrome
+          timeout 15s "$BUN_CHROME_PATH" --headless --disable-gpu --dump-dom about:blank
+      - name: Verify WebView startup
+        env:
+          BUN_CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: >-
+          bun --eval 'const view = new Bun.WebView({backend:{type:"chrome",url:false,stderr:"inherit"},dataStore:"ephemeral"});
+          const timeout = setTimeout(() => { console.error("WebView startup exceeded 30 seconds"); view.close(); process.exit(1); }, 30000);
+          try { console.time("WebView startup"); await view.navigate("about:blank"); console.log(await view.evaluate("navigator.userAgent")); console.timeEnd("WebView startup"); }
+          finally { clearTimeout(timeout); view.close(); }'
       - run: bun install --frozen-lockfile
       - run: bun run check
         env:

@@ -1,7 +1,5 @@
 import { dirname } from "node:path";
-import clipboard from "clipboardy";
 import { Data, Effect } from "effect";
-import open from "open";
 
 export class DesktopError extends Data.TaggedError("DesktopError")<{
   readonly message: string;
@@ -21,10 +19,18 @@ const desktopError = (cause: unknown) =>
 
 // Paths remain arguments to the desktop helper, never shell command strings.
 export function createDesktopActions(
-  writeClipboard: (text: string) => Promise<void> = (text) =>
-    clipboard.write(text),
-  openDirectory: (directory: string) => Promise<unknown> = (directory) =>
-    open(directory, { wait: false }),
+  writeClipboard: (text: string) => Promise<void> = async (text) => {
+    const { default: clipboard } = await import("clipboardy");
+
+    await clipboard.write(text);
+  },
+  openDirectory: (directory: string) => Promise<unknown> = async (
+    directory,
+  ) => {
+    const { default: open } = await import("open");
+
+    return open(directory, { wait: false });
+  },
 ): DesktopActions {
   return {
     copy: (text) =>

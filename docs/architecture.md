@@ -4,6 +4,7 @@ Open [ARCHITECTURE.md](../ARCHITECTURE.md) for the canonical Mermaid data-flow d
 
 | Module | Responsibility |
 | --- | --- |
+| [main.ts](../src/main.ts) | Start the source or compiled executable, run the CLI Effect, and apply its exit code. |
 | [cli.ts](../src/cli.ts) | Define flags with `effect/unstable/cli`, provide Bun platform services, choose terminal mode, and map application outcomes and signals to exit codes. |
 | [crawl.ts](../src/crawl.ts) | Discover scoped category/pagination/product links, run bounded batches with `Effect.forEach`, and enforce the whole-crawl deadline. |
 | [http.ts](../src/http.ts) | Wrap native `fetch` in request scopes, validate redirects and HTML, bound response size, retry eligible failures, and release response bodies on interruption. |
@@ -21,6 +22,6 @@ Each request attempt has an abort controller. Response and body-reader scopes cl
 
 The CLI loads the terminal module only when all three streams are TTYs, CI is inactive, and interaction is enabled. Help goes to stdout when explicitly requested; usage errors and their help go to stderr. The parser and catalog know nothing about terminal keys or desktop helpers. The default copy action reuses the exact exported text. Alternate-format copy actions serialize the retained validated catalog, without another crawl or file write. Desktop promise adapters report `DesktopError`; interruption cannot undo an external action already started.
 
-The same CLI entry point runs from source and in a standalone executable. The build embeds Bun, application dependencies, and Ink's Yoga WebAssembly asset. It disables automatic environment-file and Bun-configuration loading and excludes optional React development tools. The compiled application keeps the same extraction, output, and terminal behavior; packaging adds no alternative crawl path.
+The same `main.ts` entry point runs from source and in a standalone executable; importing `cli.ts` does not start a run. Desktop libraries load only when an action is requested, so optional system helpers cannot prevent terminal startup. The build embeds Bun, application dependencies, and Ink's Yoga WebAssembly asset. It disables automatic environment-file and Bun-configuration loading and excludes optional React development tools. The compiled application keeps the same extraction, output, and terminal behavior; packaging adds no alternative crawl path.
 
 [The Effect walkthrough](effect.md) follows failure and cleanup through the code. [Source evidence](source-behavior.md) explains the pricing adapter. [Distribution](distribution.md) describes executable targets, desktop requirements, and platform verification. The [README](../README.md#develop-and-verify) provides the source-development commands.

@@ -4,7 +4,7 @@ The application uses Effect v4 **4.0.0-rc.115** and the matching `@effect/platfo
 
 ## Follow one run
 
-[`runCli`](../src/cli.ts) returns an `Effect<number>` whose result is the process exit code. The executable runs that Effect once with `Effect.runPromise`. `Command` and `Flag` define the existing command-line interface, and `BunServices.layer` supplies its platform services. Buffered help keeps invalid usage on stderr and explicit `--help` on stdout.
+[`runCli`](../src/cli.ts) returns an `Effect<number>` whose result is the process exit code. The [`main.ts` entry point](../src/main.ts) runs that Effect once with `Effect.runPromise`. `Command` and `Flag` define the existing command-line interface, and `BunServices.layer` supplies its platform services. Buffered help keeps invalid usage on stderr and explicit `--help` on stdout.
 
 The main sequence is crawl, validate, serialize, write, then show completion. Inside `Effect.gen`, `yield*` runs the next Effect and stops that sequence on failure. For example, [`crawl`](../src/crawl.ts) returns `Effect<CrawlResult, CrawlError>`: callers receive a catalog or a typed failure, without starting an independent promise chain.
 

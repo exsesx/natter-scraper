@@ -9,8 +9,8 @@
     "bun": "1.4.2"
   },
   "scripts": {
-    "scrape": "bun src/cli.ts",
-    "help": "bun src/cli.ts --help",
+    "scrape": "bun src/main.ts",
+    "help": "bun src/main.ts --help",
     "build": "bun scripts/build.ts",
     "test": "bun test ./tests",
     "test:terminal": "bun scripts/verify-terminal.ts",

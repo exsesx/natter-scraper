@@ -60,7 +60,7 @@ async function run(binary: string, args: string[], fixtureUrl?: string) {
 try {
   await mkdir(emptyPath);
   await compileBinary({
-    entrypoint: join(projectRoot, "src/cli.ts"),
+    entrypoint: join(projectRoot, "src/main.ts"),
     outfile: production,
   });
   await compileBinary({

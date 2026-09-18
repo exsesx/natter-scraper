@@ -96,7 +96,7 @@ if (import.meta.main) {
     const outfile = join(projectRoot, "dist", binaryName(target));
 
     await compileBinary({
-      entrypoint: resolve(projectRoot, "src/cli.ts"),
+      entrypoint: resolve(projectRoot, "src/main.ts"),
       outfile,
       target,
     });

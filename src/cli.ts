@@ -306,6 +306,3 @@ export function finishCli(code: number): void {
   // exits after Effect finalization; successful writes finish naturally.
   if (code === 130 || code === 143) process.exit(code);
 }
-
-if (import.meta.main)
-  finishCli(await Effect.runPromise(runCli(process.argv.slice(2))));

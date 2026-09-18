@@ -2,6 +2,7 @@
 
 ```mermaid
 flowchart TD
+    ENTRY["main.ts: execute the CLI Effect"] --> CLI
     CLI["cli.ts: Effect CLI, Bun services, signals"] --> CRAWL["crawl.ts: discovery, bounded Effect batches, deadline"]
     CRAWL --> HTTP["http.ts: native fetch, scoped resources, timeout and retries"]
     HTTP --> PARSE["site.ts: HTML fields, options, source price rule"]

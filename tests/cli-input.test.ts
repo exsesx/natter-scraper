@@ -1,7 +1,10 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+// Some cases start three CLI processes; allow startup time on shared CI runners.
+setDefaultTimeout(30_000);
 
 const directory = await mkdtemp(join(tmpdir(), "natter-cli-input-"));
 const inputPath = join(directory, "saved catalog with spaces.json");

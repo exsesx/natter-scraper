@@ -14,3 +14,5 @@ Automatic formatting excludes these HTML files. Git attributes preserve their sa
 See [source observations](../../../docs/source-behavior.md) for browser-confirmed prices, colors, and discovery limits. Tests label mutations of these fragments as synthetic cases. These fragments contain no scripts: they verify snapshot parsing, not interactive price changes.
 
 Keep expected results independent of parser output. [Parser tests](../../site.test.ts) assert known source values; [browser tests](../../product-browser.test.ts) use synthetic handlers with explicit prices, dependent colors, delayed requests, and failure cases. [CLI tests](../../cli.test.ts) assert a hand-calculated catalog and total from a separate synthetic site. A passing schema check cannot prove completeness or correct prices.
+
+Saved-catalog loading is covered separately by [input validation tests](../../input.test.ts) and [saved-input CLI tests](../../cli-input.test.ts). Those tests use explicit JSON data and do not make the captured fragments evidence of a fresh scrape.

@@ -49,14 +49,14 @@ For that first pass, `bun run check` passed type checking, linting, and all **21
 
 ## Concurrency and correctness experiments
 
-A second performance pass on 2026-09-18 compared higher concurrency with two extraction shortcuts. The CLI now accepts `--concurrency N`, retaining a portable default of two. The limit applies to active products and discovery document requests; a browser can make several resource requests for one product.
+A second performance pass on 2026-09-18 compared higher concurrency with two extraction shortcuts. The CLI accepts `--concurrency N`, with an automatic startup default capped at six based on the measurements below. The limit applies to active products and discovery document requests; a browser can make several resource requests for one product.
 
 | Candidate | Observed result | Decision |
 | --- | --- | --- |
 | Shorten stable-state wait from 500 ms to 100 ms | Three synthetic cases returned the old $10.11 or an intermediate $20.22 instead of the final $71.83 after a 300 ms timer | Retain 500 ms |
 | Skip storage reloads for products without colors | Hidden click history changed later prices to $99.99 and carried descriptions forward | Retain reloads |
 | Skip all storage reloads | Later names retained a previous color suffix, descriptions accumulated, and fresh-document currency validation was skipped | Retain reloads |
-| Increase product concurrency | Completed full live crawls at 4, 6, and 8 with identical output and no retries | Expose `--concurrency`; keep the portable default at 2 |
+| Increase product concurrency | Completed full live crawls at 4, 6, and 8 with identical output and no retries | Expose `--concurrency`; cap the automatic default at 6 |
 
 The timer experiments retained request tracking and selection validation. Both waits handled an unchanged price and an 800 ms tracked pricing request, but only the existing window passed all five cases. Bounded rendered checks of products 31 and 1 found no explicit completion marker in the product wrapper. A selected control, a changed price, or idle network alone cannot prove that an unannounced timer has finished. The 500 ms window remains a documented heuristic, not a universal completion guarantee.
 
@@ -64,7 +64,7 @@ The rejected implementations were temporary experiments. Regression tests retain
 
 Memory sampling found that Chrome retained completed documents in its back/forward cache even though extraction never navigates back. Clearing navigation history did not release those renderers. The browser now launches with `--disable-features=BackForwardCache`, a [Chromium-supported flag](https://chromium.googlesource.com/chromium/src/+/7f1fdb75589801292a49e3bb4d53c282f50bef6e). In a ten-product probe, the default browser ended with 11 renderer processes and peaked at 1954 MiB of process-tree RSS. Disabling the cache kept five renderer processes and peaked at 1381 MiB. These counts include browser baseline renderers, not just active product tabs.
 
-A lifecycle regression checks that a completed document's `pagehide` event reports `persisted: false`. Another regression exposed session data written during `pagehide`, after the old cleanup ran. A temporary script now clears `sessionStorage` and `window.name` at the start of the next product, before its scripts execute. It removes itself before storage-choice reloads, preserving within-product state and fresh-document validation.
+A lifecycle regression checks that a completed document's `pagehide` event reports `persisted: false`. Another regression exposed session data written during `pagehide`, after the old cleanup ran. A temporary script now clears `sessionStorage` and `window.name` at the start of the next product, before its scripts execute. The adapter removes this script before storage-choice reloads, preserving within-product state and fresh-document validation.
 
 Full live measurements used an Apple M1 Pro with ten CPU cores and 16 GiB RAM, macOS arm64, Bun 1.4.2, and Chrome. Runs were serial, with no other scraper tests running alongside them. Each completed run found 147 products across 179 pages, produced exactly the same 423 rows and $345,701.52 total as the verified reference, and reported zero HTTP retries.
 
@@ -76,11 +76,15 @@ Full live measurements used an Apple M1 Pro with ten CPU cores and 16 GiB RAM, m
 | 6 | 104.403 s | 2478 MiB | Cache and tab-state cleanup fixes |
 | 8 | 84.747 s | 3335 MiB | Cache and tab-state cleanup fixes |
 
-Eight was the fastest tested setting on this machine; six used less process memory and still finished in under two minutes. Use `bun run scrape --concurrency 8 -o products.json` for that tested setting. The default remains two for portability. These are individual live runs, not a statistical optimum or a recommendation for other sources. RSS sums the scraper and its browser descendants once per second and may count shared memory more than once; it is not unique physical memory. Background system activity and network conditions were uncontrolled. Global swap counters were recorded but cannot attribute swapping to this scraper. An interrupted eight-slot run is excluded from the table.
+Eight was the fastest tested setting on this machine; six used less process memory and still finished in under two minutes. Six therefore caps the automatic default, balancing the measured elapsed time and browser memory. Use `bun run scrape --concurrency 8 -o products.json` to select the fastest tested setting, or choose a lower value to reduce concurrency. CPU count alone cannot determine the best setting: browser memory, observation waits, network conditions, and source capacity also matter. These are individual live runs, not a statistical optimum or a recommendation for other sources.
+
+RSS sums the scraper and its browser descendants once per second and may count shared memory more than once; it is not unique physical memory. Background system activity and network conditions were uncontrolled. Global swap counters were recorded but cannot attribute swapping to this scraper. An interrupted eight-slot run is excluded from the table.
+
+The current startup default is `max(1, min(6, available CPUs, floor(total RAM / 2 GiB)))`, using `availableParallelism()` rather than a physical-core count. The 2 GiB per slot is a heuristic based on total RAM; the RSS samples do not establish a per-worker memory allocation. This lowers the default on machines with fewer available CPUs or less RAM, but does not account for current system load or adjust during a run. `--concurrency N` overrides the result, including values above six. Neither the formula nor the measured cap establishes an optimum for another machine.
 
 Run `bun run benchmark` to reproduce the offline concurrency comparison. It uses the production crawler against 12 loopback products with plain, storage, color, and storage-plus-color controls. Each run must produce the independently specified 24 rows and $568.80 total. After a one-product warmup, the script measures 2/4/6/8 and then 8/6/4/2. These fixtures isolate scheduling and browser overhead; they do not model the live site's network or script costs.
 
-All eight benchmark runs passed their output checks with no retries. Elapsed seconds were:
+All eight benchmark runs on 2026-09-18 passed their output checks with no retries. Elapsed seconds were:
 
 | Concurrency | Ascending-order round | Descending-order round |
 | --- | ---: | ---: |
@@ -91,7 +95,9 @@ All eight benchmark runs passed their output checks with no retries. Elapsed sec
 
 This small mixed fixture has less parallel work than the live catalog, so six and eight finish close together. It checks repeatable output and the effect of concurrency; it does not establish a universal best setting.
 
-Checkpoint verification passed `bun run check` with **247 tests**, type checking, and linting; `bun run test:terminal` passed **16 cases**. `bun run test:binary` passed native macOS arm64 exports and compiled terminal checks, including execution outside the checkout with no Bun on `PATH`. Desktop helpers remained mocked. Other native platforms and the remote CI matrix were not executed in this pass. Review also added a browser regression that rejects multiple rendered product wrappers instead of silently reading only the first.
+The 2026-09-18 checkpoint, before saved-catalog input and automatic concurrency were added, passed `bun run check` with **247 tests**, type checking, and linting; `bun run test:terminal` passed **16 cases**. `bun run test:binary` passed native macOS arm64 exports and compiled terminal checks, including execution outside the checkout with no Bun on `PATH`. Desktop helpers remained mocked. Other native platforms and the remote CI matrix were not executed in this pass. Review also added a browser regression that rejects multiple rendered product wrappers instead of silently reading only the first.
+
+Saved-catalog input (`--input FILE`) does not revisit these pages or observe prices. It validates the exported JSON shape, cent precision, and total before browsing or converting the data. Passing that validation establishes internal consistency, not current prices or source coverage.
 
 ## Discovery evidence
 

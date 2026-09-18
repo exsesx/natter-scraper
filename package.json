@@ -13,6 +13,7 @@
     "scrape": "bun src/main.ts",
     "help": "bun src/main.ts --help",
     "build": "bun scripts/build.ts",
+    "benchmark": "bun scripts/benchmark.ts",
     "test": "bun test ./tests",
     "test:terminal": "bun scripts/verify-terminal.ts",
     "test:binary": "bun scripts/verify-binary.ts",

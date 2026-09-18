@@ -49,6 +49,7 @@ class UsageError extends Data.TaggedError("UsageError")<{
 }> {}
 
 interface Options {
+  concurrency: string;
   output: Option.Option<string>;
   format: OutputFormat | "auto";
   pretty: Option.Option<boolean>;
@@ -85,7 +86,10 @@ TERMINAL
   Exit:  q close    Esc back    Ctrl+C cancel
 
 LIMITS
-  2 concurrent requests, 15s per request, 10min per run, 2 retries.
+  --concurrency defaults to 2 product slots and concurrent document requests.
+  Browser resource requests can exceed this count; higher values use more memory
+  and increase load on the source site.
+  15s per request/browser operation, 10min per run, 2 HTTP retries.
   Exit codes: 0 success/help, 1 scrape/write failure, 2 usage, 130 Ctrl+C.
   On macOS/Linux, SIGTERM exits 143. Windows forced termination cannot run cleanup.
 `;
@@ -97,6 +101,19 @@ function scrape(
 ) {
   return Effect.scoped(
     Effect.gen(function* () {
+      const concurrency = Number(options.concurrency);
+
+      if (
+        !options.concurrency ||
+        /[^0-9]/.test(options.concurrency) ||
+        !Number.isSafeInteger(concurrency) ||
+        concurrency < 1
+      )
+        return yield* new UsageError({
+          message:
+            "--concurrency must be a positive safe integer in decimal digits.",
+        });
+
       const outputPath = Option.getOrUndefined(options.output);
 
       if (outputPath !== undefined && !outputPath.trim())
@@ -144,6 +161,7 @@ function scrape(
         yield* writeStream(process.stderr, "Reading the static catalog…\n");
 
       const result = yield* (dependencies.crawl ?? crawl)({
+        concurrency,
         onProgress: (progress) => ui?.update(progress),
       });
 
@@ -203,6 +221,12 @@ export function runCli(
     const command = Command.make(
       "natter-scraper",
       {
+        concurrency: Flag.String("concurrency").pipe(
+          Flag.withDescription(
+            "Maximum concurrent products and document requests; positive integer (higher uses more memory and source capacity)",
+          ),
+          Flag.withDefault("2"),
+        ),
         output: Flag.String("output").pipe(
           Flag.withAlias("o"),
           Flag.withDescription(

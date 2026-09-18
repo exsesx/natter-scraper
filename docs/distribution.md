@@ -1,21 +1,22 @@
 # Standalone executables
 
-The executable includes Bun and the application dependencies. An end user needs the matching executable and network access to the assigned catalog. They do not need Bun, Node.js, Python, or a checkout of this repository. Clipboard and folder actions have separate [desktop requirements](#desktop-actions).
+The executable includes Bun and the application dependencies. Users need the file for their OS and architecture, network access to the catalog, and an installed Chrome-family browser (Chrome, Chromium, Edge, or Brave). No separate Bun/Node runtime or repository checkout is required. Clipboard and file-opening actions have separate [desktop requirements](#desktop-actions).
 
-Download executables from [GitHub Releases](https://github.com/exsesx/natter-scraper/releases), or build them locally. CI attaches native builds to its workflow runs; release assets are published separately from those checked builds. The build does not configure publisher signing or notarization; Bun's macOS executable has an ad hoc signature.
+Extraction uses Bun.WebView's Chrome backend on all platforms, including macOS, for request interception and network observation. Bun searches standard browser locations; `BUN_CHROME_PATH` can provide an absolute executable path, including in CI or with an empty `PATH`. The browser runs headlessly with an ephemeral profile, so scraping does not need a desktop session. The WebView API is experimental and tied to the pinned Bun release. See [Bun's backend documentation](https://bun.com/docs/runtime/webview#backends).
 
-Keep `THIRD_PARTY_NOTICES.txt` with the executable when redistributing it. `bun run build` copies the [versioned notices](THIRD_PARTY_NOTICES.txt) to `dist/`. They cover Bun and the production dependency tree pinned for this release. Refresh the notices when upgrading those dependencies.
+Download from [GitHub Releases](https://github.com/exsesx/natter-scraper/releases), or build locally. CI uploads native builds as workflow artifacts; publishing a release is a separate step. The build does not configure publisher signing or notarization.
+
+Keep `THIRD_PARTY_NOTICES.txt` with redistributed executables. `bun run build` copies the [notices](THIRD_PARTY_NOTICES.txt) to `dist/`. Refresh them when upgrading Bun or production dependencies.
 
 ## Run an executable
 
-Choose the file for your OS and architecture. Keep the filename below, or rename it to `natter-scraper` on macOS/Linux or `natter-scraper.exe` on Windows.
-
-For example, on an Apple silicon Mac:
+On an Apple silicon Mac:
 
 ```sh
 chmod +x natter-scraper-darwin-arm64
 
 ./natter-scraper-darwin-arm64 --help
+./natter-scraper-darwin-arm64
 ./natter-scraper-darwin-arm64 --output products.json --pretty
 ```
 
@@ -23,14 +24,17 @@ On Windows x64 in PowerShell:
 
 ```powershell
 .\natter-scraper-windows-x64.exe --help
+.\natter-scraper-windows-x64.exe
 .\natter-scraper-windows-x64.exe --output products.json --pretty
 ```
 
-Linux uses the same `./filename` commands as macOS with the appropriate Linux filename. All executable variants accept the flags and completion keys documented in the [README](../README.md#run). Prefer `--output` when saving a file so an unsuccessful crawl preserves the previous result. `--no-interactive` disables terminal interaction for automation.
+Linux uses the macOS command form with its own filename. See the [CLI flags](../README.md#run) and [browser controls](../README.md#browse-in-a-terminal).
+
+A plain interactive terminal run opens the browser. `--output products.csv` infers CSV, saves, and exits; add `-i` to browse afterward. Pipes, redirected streams, active CI, `TERM=dumb`, `--no-interactive`, and `--output -` bypass the browser. Prefer `--output` to shell redirection when saving so a failed crawl preserves the previous file.
 
 ## Build from source
 
-Use the repository's pinned Bun **1.4.2** from the repository root:
+Use the pinned Bun version in [`.bun-version`](../.bun-version), currently 1.4.2, from the repository root:
 
 ```sh
 bun install --frozen-lockfile
@@ -58,7 +62,7 @@ bun run build --target bun-linux-x64
 
 Linux builds require glibc. Alpine and other musl distributions are outside these targets. x64 builds use Bun's baseline CPU target. Cross-compiling a file does not verify that it runs on the target platform; run the native checks there.
 
-The build embeds Ink's Yoga WebAssembly asset and omits optional React development tools. It disables automatic loading of `.env` and `bunfig.toml` files so a user's working directory does not silently configure the executable. Explicit process environment settings, including the documented `CI` behavior, still apply.
+The build embeds Ink's Yoga WebAssembly asset, omits optional React development tools, and disables automatic loading of `.env` and `bunfig.toml`. Process environment settings, including `CI`, still apply.
 
 ## Verify on the target platform
 
@@ -67,30 +71,33 @@ bun run check
 
 bun run test:terminal
 
-bun run build
 bun run test:binary
 ```
 
-`check` covers the source application using captured HTML, synthetic cases, and local HTTP servers. `test:terminal` uses `Bun.Terminal` and fixture servers to exercise the source CLI. `test:binary` builds temporary production and fixture executables, checks output, and runs the main terminal cases through the compiled fixture. These checks do not crawl the public catalog, copy real clipboard contents, or open folders.
+| Command | Coverage |
+| --- | --- |
+| `check` | Types, lint, and tests using captured HTML, synthetic cases, and local HTTP servers. |
+| `test:terminal` | Source CLI in `Bun.Terminal`: navigation, dialogs, exports, resize, interaction defaults, and cancellation. |
+| `test:binary` | Builds temporary production and fixture executables; checks help, exports, file replacement, failures, and the terminal CLI cases against the compiled fixture. The additional mocked UI case still runs from source. |
 
-The terminal suite has 13 cases on macOS/Linux. It covers completion keys, alternate copy formats, resize, opt-out/CI behavior, and cancellation while running or after completion. It compares `stty -g` before and after each terminal session to check POSIX terminal-mode restoration.
+These checks neither crawl the public catalog nor change the real clipboard or open desktop windows. Extraction tests launch a headless browser against local fixtures. Headless binary checks run outside the checkout with no Bun or desktop helpers on `PATH`; an installed browser is still required.
 
-Windows uses ConPTY and runs 11 cases. It skips the two POSIX SIGTERM cases. Ctrl+C is exercised as terminal input; force-killing a Windows process is not a graceful cancellation path. Full Windows console-mode restoration is not verified by these checks.
+On macOS/Linux, terminal checks compare `stty -g` before and after each session. Windows uses ConPTY, tests Ctrl+C as terminal input, and skips POSIX SIGTERM cases. Full Windows console-mode restoration remains unverified. The terminal transcript is not a screen emulator; rendering tests in `check` inspect the current frame.
 
-During `test:binary`, 10 terminal cases execute the compiled fixture on macOS/Linux, or 8 on Windows. The three alternate-copy cases still use the source UI helper with mocked desktop actions. They do not establish that the packaged executable can access the real clipboard.
+[CI](../.github/workflows/check.yml) configures six native jobs, one per platform above. Each runs all three commands, builds, and uploads `dist/` for 14 days. Configuration alone does not establish a pass; consult [workflow results](https://github.com/exsesx/natter-scraper/actions/workflows/check.yml) for the exact commit. Record the checked commit, native platforms, and artifacts when publishing a release.
 
-[CI](../.github/workflows/check.yml) has six native jobs, one per OS/architecture pair above. Each runs the source checks, terminal checks, compiled checks, and uploads its executable as a workflow artifact. [Workflow results](https://github.com/exsesx/natter-scraper/actions/workflows/check.yml) record the outcome for each commit. Release notes identify the checked commit and supported artifacts.
+The workflow installs a browser with [setup-chrome](https://github.com/browser-actions/setup-chrome) and passes its absolute path to all checks. It uses the stable channel except on Windows arm64, where the action supports Chromium snapshots instead. These CI changes need a remote run; local macOS verification does not establish that the other jobs pass.
 
 ## Desktop actions
 
-Scraping and file export work without a desktop session. Completion keys that copy or open a folder need the OS integration below:
+Scraping and file export work without a desktop session. Browser actions that copy text or open a file or folder need the OS integration below:
 
-| Platform | Clipboard | Open saved file's folder |
+| Platform | Clipboard | Open saved file or folder |
 | --- | --- | --- |
 | macOS | `pbcopy` | System `open` command |
 | Windows | PowerShell clipboard support | Windows shell through PowerShell |
 | Linux | `wl-copy` for Wayland or `xsel` for X11 | `xdg-open` |
 
-A desktop session must make these helpers available. Missing helpers and other detected failures appear in the completion view. “Folder open requested” confirms that the request was handed to the launcher; it does not establish that a folder became visible, and a later launcher failure may go undetected. The completed export remains available and the file is unchanged. Use `--no-interactive` for unattended runs.
+After saving, `p` copies the path, `o` opens its folder, and `f` opens the file in its default application. These actions require a desktop session and the helpers above. Saving alone launches nothing. Detected failures appear in the browser without changing the export; an open-request confirmation does not prove that an application became visible.
 
-Desktop checks use injected helpers. Actual clipboard writes and folder opening have not been verified across these platforms.
+Desktop tests inject helpers. They do not verify real clipboard access or application launches across these platforms.

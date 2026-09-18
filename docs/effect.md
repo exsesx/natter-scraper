@@ -1,47 +1,52 @@
 # Effect in this scraper
 
-The application uses Effect v4 **4.0.0-rc.115** and the matching `@effect/platform-bun` release candidate. The CLI imports `effect/unstable/cli`. These are intentional prerelease choices, pinned together in [package.json](../package.json); consult the installed v4 API when changing them.
+[package.json](../package.json) pins Effect v4 and `@effect/platform-bun` to `4.0.0-rc.115`. The CLI uses `effect/unstable/cli`. These are prerelease APIs; check the installed version when changing them.
 
 ## Follow one run
 
-[`runCli`](../src/cli.ts) returns an `Effect<number>` whose result is the process exit code. The [`main.ts` entry point](../src/main.ts) runs that Effect once with `Effect.runPromise`. `Command` and `Flag` define the existing command-line interface, and `BunServices.layer` supplies its platform services. Buffered help keeps invalid usage on stderr and explicit `--help` on stdout.
+[`main.ts`](../src/main.ts) runs [`runCli`](../src/cli.ts) once with `Effect.runPromise`. `runCli` returns an `Effect<number>` containing the exit code. `BunServices.layer` supplies CLI platform services.
 
-The main sequence is crawl, validate, serialize, write, then show completion. Inside `Effect.gen`, `yield*` runs the next Effect and stops that sequence on failure. For example, [`crawl`](../src/crawl.ts) returns `Effect<CrawlResult, CrawlError>`: callers receive a catalog or a typed failure, without starting an independent promise chain.
+Inside `Effect.gen`, `yield*` runs an Effect and stops the sequence on failure. A minimal direct export looks like this:
 
-Discovery and product fetching use bounded `Effect.forEach` batches. [`requestHtml`](../src/http.ts) owns native `fetch`, redirects, response validation, and body reads. `Effect.timeoutOrElse` bounds an attempt; an exponential `Schedule` retries eligible failures and waits at least as long as `Retry-After` requests. The separate crawl deadline includes retry waits.
+```ts
+const exportCatalog = Effect.gen(function* () {
+  const result = yield* crawl();
+
+  yield* writeResult(serializeCatalog(result.catalog));
+});
+```
+
+The actual CLI adds flag validation, terminal handling, and signals. [`crawl`](../src/crawl.ts) returns `Effect<CrawlResult, CrawlError>`, after bounded discovery and product observation. Product work uses one `Effect.forEach` over the discovered URLs, with bounded concurrency, so finishing a product immediately frees its slot for the next URL. [`requestHtml`](../src/http.ts) owns each fetch attempt. Its timeout covers redirects and body reads; retries wait for the longer of exponential backoff and `Retry-After`. The crawl deadline includes retry waits. Finalizer cleanup can extend elapsed time beyond either deadline.
+
+Expected failures use yieldable `Data.TaggedError` types. `RequestFailure` retains the URL, attempt count, and underlying `HTTP`, `Transport`, `RequestTimeout`, or `InvalidResponse` error. Parsing uses `ExtractionError`; catalog validation uses `CatalogError`. Unexpected exceptions remain defects. In particular, a synchronously throwing injected fetch adapter is not retried as a transport failure.
 
 ## Failure and cleanup
 
-Each request attempt creates an abort controller. Response and reader scopes register cleanup for each redirect; the pending-fetch adapter also waits for an interrupted fetch to settle. On failure or interruption, it aborts network work, awaits body cancellation, and releases the reader lock. A failing batch interrupts its siblings and waits for their finalizers before settling.
+Each attempt owns an abort controller. Each response and body reader has a scope. Redirect responses close before the next request, and interruption waits for pending fetch and body cleanup. A failed request or product observation interrupts its siblings and waits for their finalizers.
+
+`createProductReader` requires an Effect scope and registers a finalizer for every view it creates. Each `Effect.tryPromise` observation leases an idle view or creates one. A successful read ends the document and detaches its listeners before returning the view for reuse. A temporary new-document script clears tab-local state before the next product's scripts run, then removes itself before storage-choice reloads. The callback's abort signal and operation timeouts close the active view; failed reads discard it. The crawl scope closes all remaining views on every exit path. The adapter never attaches to the user's running browser or calls the process-wide `closeAll()` API. Each storage choice is observed afresh; there is no inferred price table.
 
 ```mermaid
 sequenceDiagram
-    participant Run as Crawl or CLI boundary
-    participant Request as Active request scope
-    participant Native as Native fetch and body reader
-    Run->>Request: Interrupt on failure, deadline, or signal
+    participant Run as Crawl or CLI
+    participant Request as Request scope
+    participant Native as Fetch and body reader
+    Run->>Request: Interrupt
     Request->>Native: Abort network work
-    Request->>Native: Await body cancellation
-    Native-->>Request: Cleanup completes#59; release reader lock
-    Request-->>Run: Request settles after finalizers
+    Request->>Native: Await cancellation
+    Native-->>Request: Cancellation settles
+    Request->>Native: Release reader lock if acquired
+    Request-->>Run: Settle after finalizers
 ```
 
-Expected errors are tagged with `Data.TaggedError`. These errors are yieldable in v4, so validators can use `return yield* invalid(message)`. The small `invalid` functions construct the domain error and retain its source context; they do not throw or catch defects. `RequestFailure` retains the URL, attempt count, and underlying `HTTP`, `Transport`, `RequestTimeout`, or `InvalidResponse` cause. Source parsing uses `ExtractionError`; money and identity validation use `CatalogError`. A synchronous exception from an injected fetch adapter is a defect and is not retried as a transport failure.
+[`writeResult`](../src/output.ts) uses `Effect.acquireUseRelease` to open, write, and close a temporary file. A close failure can accompany a write failure in the typed error cause. Publication is uninterruptible, so cancellation cannot stop between starting rename/link and observing its result. An exit finalizer removes the temporary filename. The [architecture guide](architecture.md#data-and-output) explains overwrite and stdout guarantees.
 
-[`writeResult`](../src/output.ts) uses `Effect.acquireUseRelease` to open, write, and close the temporary file. Its release can report a typed close error alongside a write failure without separate mutable error state. It then performs the rename without interruption between starting that operation and observing its result. An exit finalizer removes the owned temporary file when it remains. This provides atomic replacement through a same-directory rename. Stdout uses a write callback to wait for completion and handle backpressure; already-written bytes cannot be rolled back.
+The CLI races work against cancellation and leaves its scopes before applying the exit code. Ctrl+C exits 130; POSIX SIGTERM exits 143. Windows force termination cannot guarantee cleanup.
 
-The CLI races application work against cancellation and leaves its scopes before applying the exit code. Ctrl+C exits with code 130. On macOS/Linux, SIGTERM follows the same cleanup path and exits with code 143. Windows force termination does not deliver the equivalent graceful signal, so it cannot guarantee these finalizers run.
+React callbacks start separate action fibers. Shutdown interrupts and joins the active action, restores the terminal, then permits the completion summary. Renderer teardown failures reach the CLI. Desktop helpers expose promises without an abort contract, so interruption cannot guarantee stopping or undoing a clipboard or file-opening action.
 
-Ink is acquired only for an interactive run. React input handlers are a separate runtime boundary for completion actions. Shutdown joins the active action and any retiring renderer before completing; renderer teardown failures propagate to the CLI. Their Effect fibers can be interrupted, but the clipboard and folder helpers expose promises without an abort contract. Cancellation cannot guarantee stopping or reversing an external desktop action.
+## Changing the code
 
-## Why native adapters remain
+Keep snapshot parsing in `site.ts`, option interaction in `product-browser.ts`, catalog rules in `catalog.ts`, and pure serialization in `format.ts`. The browser promise adapter runs the pure parsing Effect when it receives settled markup; other runtime entry points are CLI startup, tests, and React callbacks. HTTP and file adapters remain native to preserve explicit redirect validation, awaited fetch cancellation, and typed file-close failures. Preserve those behaviors if replacing them with platform services.
 
-The pinned platform adapters do not remove the guarantees implemented here. The fetch adapter must await aborted native work, validate every redirect before following it, and enforce the body-size limit while reading. File output must preserve close failures in its typed error channel and combine them with a primary write failure. Replacing these adapters with the corresponding platform APIs in `4.0.0-rc.115` would require extra wrappers to retain those behaviors. Reassess this choice against these requirements when upgrading Effect.
-
-## Change and test
-
-Keep site rules in `site.ts` and catalog rules in `catalog.ts`; neither needs a service layer to use Effect. Pure helpers, including `serializeCatalog`, remain ordinary functions. Reserve Effects for typed failures, asynchronous work, and resource ownership. The HTTP test seam is an injected fetch function, and desktop tests inject the clipboard/folder functions. Start runtime execution at the CLI, tests, or React callback boundary, rather than inside parsing or crawling helpers.
-
-Tests use `Effect.runPromise` for returned values and `Effect.runPromiseExit` when inspecting tagged errors or defects. [Crawl tests](../tests/crawl.test.ts) cover retry counts, deadlines, sibling interruption, and delayed body cleanup. [Output tests](../tests/output.test.ts) cover file preservation, temporary cleanup, and blocked writes. Run `bun run check`; use the [terminal verification command](../README.md#develop-and-verify) when changing UI or signal handling.
-
-Standalone builds execute the same Effect entry point. `bun run test:binary` checks the compiled application and its terminal behavior with fixtures. See [distribution](distribution.md#verify-on-the-target-platform) for native target checks and the limits of Windows cancellation verification.
+Tests use `Effect.runPromise` for values and `Effect.runPromiseExit` for errors or defects. [Crawl tests](../tests/crawl.test.ts) cover retries, deadlines, sibling interruption, and delayed cleanup; [output tests](../tests/output.test.ts) cover file preservation and blocked writes. Run `bun run check`. UI or signal changes also require [terminal verification](../README.md#develop-and-verify); [standalone verification](distribution.md#verify-on-the-target-platform) exercises the same entry point after compilation.

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { defaultConcurrency } from "../src/concurrency";
 
 // Exercise the actual parser and output streams without launching a browser.
 const entrypoint = `
@@ -34,7 +35,7 @@ async function run(args: readonly string[]) {
 
 describe("CLI concurrency", () => {
   test.each([
-    { args: [], expected: 2 },
+    { args: [], expected: defaultConcurrency() },
     { args: ["--concurrency", "1"], expected: 1 },
     { args: ["--concurrency", "4", "-i"], expected: 4 },
     { args: ["--concurrency=8", "--output", "-"], expected: 8 },
@@ -44,6 +45,7 @@ describe("CLI concurrency", () => {
 
     expect(result.code).toBe(0);
     expect(result.stderr).toContain(`CRAWL {"concurrency":${expected}}\n`);
+    expect(result.stderr).toContain(`(concurrency ${expected})`);
     expect(result.stdout).toBe(
       '{"results":[{"name":"Fixture","description":"Observed product.","price":1}],"total":1}\n',
     );
@@ -90,7 +92,11 @@ describe("CLI concurrency", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("--concurrency");
-    expect(result.stdout).toContain("defaults to 2 product slots");
+    expect(result.stdout).toContain("defaults to an automatic limit of 1–6");
+    expect(result.stdout).toContain("total RAM / 2 GiB");
+    expect(result.stdout).toContain(
+      `This machine selects ${defaultConcurrency()}`,
+    );
     expect(result.stdout).toContain(
       "Browser resource requests can exceed this count",
     );

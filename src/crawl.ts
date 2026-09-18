@@ -1,5 +1,6 @@
 import { Data, Effect } from "effect";
 import { buildCatalog, type CatalogError } from "./catalog.js";
+import { defaultConcurrency } from "./concurrency.js";
 import { type RequestFailure, requestHtml } from "./http.js";
 import { createProductReader, type ProductReader } from "./product-browser.js";
 import { type ExtractionError, parseListing } from "./site.js";
@@ -48,7 +49,7 @@ export function crawl(
   options: CrawlOptions = {},
 ): Effect.Effect<CrawlResult, CrawlError> {
   return Effect.gen(function* () {
-    const concurrency = options.concurrency ?? 2;
+    const concurrency = options.concurrency ?? defaultConcurrency();
     const requestTimeoutMs = options.requestTimeoutMs ?? 15_000;
     const runTimeoutMs = options.runTimeoutMs ?? 600_000;
     const retries = options.retries ?? 2;

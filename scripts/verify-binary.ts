@@ -9,6 +9,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { defaultConcurrency } from "../src/concurrency";
 import { fixturePage, fixturePrefix } from "../tests/helpers/fixture-site";
 import { binaryName, compileBinary, nativeTarget, projectRoot } from "./build";
 
@@ -74,6 +75,10 @@ try {
   assert.equal(help.stderr, "");
   assert.match(help.stdout, /--no-interactive/);
   assert.match(help.stdout, /--format/);
+  assert.match(help.stdout, /defaults to an automatic limit of 1–6/);
+  assert.ok(
+    help.stdout.includes(`This machine selects ${defaultConcurrency()}`),
+  );
   assert.ok(help.stdout.includes(binaryName(target)));
   assert.ok(!help.stdout.includes("bun run scrape"));
 
@@ -137,6 +142,7 @@ try {
     assert.equal(json.code, 0, json.stderr);
     assert.equal(json.stdout, `${JSON.stringify(expected)}\n`);
     assert.match(json.stderr, /3 products, 4 results/);
+    assert.ok(json.stderr.includes(`(concurrency ${defaultConcurrency()})`));
 
     for (const [format, delimiter] of [
       ["csv", ","],

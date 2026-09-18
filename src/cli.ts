@@ -8,6 +8,7 @@ import {
   Flag,
   GlobalFlag,
 } from "effect/unstable/cli";
+import { defaultConcurrency } from "./concurrency";
 import { crawl } from "./crawl";
 import { serializeCatalog } from "./format";
 import { writeResult, writeStream } from "./output";
@@ -56,7 +57,7 @@ interface Options {
   interactive: Option.Option<boolean>;
 }
 
-const helpNotes = `
+const helpNotes = (concurrency: number) => `
 OUTPUT
   In a terminal, browse the completed catalog without an automatic export.
   --output FILE saves and exits; add -i / --interactive to browse afterward.
@@ -87,7 +88,10 @@ TERMINAL
   Exit:  q close    Esc back    Ctrl+C cancel
 
 LIMITS
-  --concurrency defaults to 2 product slots and concurrent document requests.
+  --concurrency defaults to an automatic limit of 1–6 product slots.
+  It uses the smaller of available CPUs, total RAM / 2 GiB (rounded down), and 6.
+  This machine selects ${concurrency}; an explicit --concurrency N overrides the default.
+  The same limit applies to concurrent discovery document requests.
   Browser resource requests can exceed this count; higher values use more memory
   and increase load on the source site.
   15s per request/browser operation, 10min per run, 2 HTTP retries.
@@ -159,7 +163,10 @@ function scrape(
         : undefined;
 
       if (!ui)
-        yield* writeStream(process.stderr, "Reading the static catalog…\n");
+        yield* writeStream(
+          process.stderr,
+          `Reading the static catalog (concurrency ${concurrency})…\n`,
+        );
 
       const result = yield* (dependencies.crawl ?? crawl)({
         concurrency,
@@ -218,6 +225,7 @@ export function runCli(
       },
     });
     const formatter = CliOutput.defaultFormatter({ colors: false });
+    const concurrencyDefault = defaultConcurrency();
 
     const command = Command.make(
       "natter-scraper",
@@ -226,7 +234,7 @@ export function runCli(
           Flag.withDescription(
             "Maximum concurrent products and document requests; positive integer (higher uses more memory and source capacity)",
           ),
-          Flag.withDefault("2"),
+          Flag.withDefault(String(concurrencyDefault)),
         ),
         output: Flag.String("output").pipe(
           Flag.withAlias("o"),
@@ -295,7 +303,8 @@ export function runCli(
       Effect.provideService(Console.Console, cliConsole),
       Effect.provideService(CliOutput.Formatter, {
         ...formatter,
-        formatHelpDoc: (doc) => `${formatter.formatHelpDoc(doc)}\n${helpNotes}`,
+        formatHelpDoc: (doc) =>
+          `${formatter.formatHelpDoc(doc)}\n${helpNotes(concurrencyDefault)}`,
       }),
       Effect.provideService(
         CliConfig.CliConfig,

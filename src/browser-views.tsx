@@ -113,18 +113,24 @@ export function BrowserHeader({
   return (
     <>
       <Text bold color="cyan">
-        NATTER <Text>Catalog complete</Text>
+        NATTER{" "}
+        <Text>
+          {completion.productCount === undefined
+            ? "Catalog loaded"
+            : "Catalog complete"}
+        </Text>
       </Text>
       <Text wrap="truncate-end">
         {fitText(
-          completion.productCount +
-            " products · " +
+          (completion.productCount === undefined
+            ? ""
+            : `${completion.productCount} products · `) +
             rowCount +
             " results" +
             (narrow ? "" : ` · Total ${money(completion.catalog.total)}`) +
-            " · " +
-            (completion.elapsedMs / 1000).toFixed(1) +
-            "s",
+            (completion.elapsedMs === undefined
+              ? ""
+              : ` · ${(completion.elapsedMs / 1000).toFixed(1)}s`),
           contentWidth,
         )}
       </Text>

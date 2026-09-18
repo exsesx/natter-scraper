@@ -218,6 +218,61 @@ const largeCompletion: Completion = {
   productCount: 50,
 };
 
+test("loaded catalogs omit crawl metadata and enable actions for the input file", async () => {
+  const inputPath = resolve("saved catalog.json");
+  const view = await screen({
+    catalog: completion.catalog,
+    format: "json",
+    pretty: true,
+    outputPath: inputPath,
+  });
+
+  expect(view.text()).toContain("Catalog loaded");
+  expect(view.text()).toContain("1 results · Total $12.34");
+  expect(view.text()).not.toContain("products ·");
+  expect(view.text()).not.toContain("NaN");
+
+  for (const key of ["p", "f", "o", "j"]) await view.key(key);
+
+  expect(view.files).toEqual([inputPath]);
+  expect(view.folders).toEqual([inputPath]);
+  expect(view.copies).toEqual([
+    inputPath,
+    serializeCatalog(completion.catalog, { pretty: true }),
+  ]);
+  expect(view.saves).toEqual([]);
+
+  await view.resize(40, 16);
+
+  expect(view.text()).toContain("Catalog loaded");
+  expect(view.text()).toContain("Total $12.34");
+  expect(view.text().trimEnd().split("\n").length).toBeLessThanOrEqual(16);
+});
+
+test("empty loaded catalogs remain browsable and exportable", async () => {
+  const catalog = { results: [], total: 0 };
+  const view = await screen({ catalog, format: "json", pretty: true });
+
+  expect(view.text()).toContain("Row 0 of 0");
+
+  for (const key of [keys.down, "G", keys.enter]) await view.key(key);
+
+  expect(view.text()).toContain("Row 0 of 0");
+
+  await view.key(keys.tab);
+
+  expect(view.text()).toContain('"results": []');
+  expect(view.text()).toContain('"total": 0');
+
+  await view.key("j");
+
+  expect(view.copies).toEqual([serializeCatalog(catalog, { pretty: true })]);
+
+  await view.key("q");
+
+  expect(view.exits).toEqual([0]);
+});
+
 test("running view reports counts and only Ctrl+C cancels", async () => {
   const view = await screen();
 

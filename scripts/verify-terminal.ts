@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { stripVTControlCharacters } from "node:util";
@@ -198,9 +198,9 @@ function assertAlternateScreenRestored(output: string) {
   assert(exited > entered, "Browser did not restore the main screen");
 }
 
-function finalSummary(output: string) {
+function finalSummary(output: string, prefix = "Completed:") {
   const text = visible(output);
-  const start = text.lastIndexOf("Completed:");
+  const start = text.lastIndexOf(prefix);
 
   assert(start >= 0, "No summary after leaving the browser");
 
@@ -422,6 +422,109 @@ async function browserSaves(directory: string) {
   );
 }
 
+async function browserLoads(directory: string) {
+  const catalog = {
+    results: [
+      {
+        name: "Saved laptop",
+        description: "Saved laptop description.",
+        price: 12.34,
+      },
+      {
+        name: "Saved phone",
+        description: "Saved phone description.",
+        price: 5.66,
+        colors: ["Black", "White"],
+      },
+    ],
+    total: 18,
+  };
+  const input = join(directory, "reopen.json");
+  const original = `${JSON.stringify(catalog, null, 4)}\n`;
+  const env = {
+    FORBID_CRAWL: "1",
+    BUN_CHROME_PATH: join(directory, "missing-chrome"),
+  };
+
+  await writeFile(input, original);
+  await terminalSession(async (session) => {
+    startFixture(session, ["--input", "reopen.json"], env, directory);
+    await session.waitFor("Catalog loaded");
+    await session.waitFor("Saved laptop");
+    await session.waitFor("f - Open  o - Folder  p - Copy path");
+
+    assert.equal(
+      await readFile(input, "utf8"),
+      original,
+      "Opening rewrote input",
+    );
+    assert.doesNotMatch(
+      visible(session.output()),
+      /Discovering catalog|\d+ products|· \d+(?:\.\d+)?s/,
+    );
+
+    await press(session, keys.enter, "Saved laptop description.");
+    await press(session, "]", "Saved phone description.");
+    await press(session, keys.escape, "Saved phone");
+    await press(session, keys.tab, '"results": [');
+    await press(session, keys.tab, "Saved phone");
+    await press(session, "s", "Save catalog");
+    await setSavePath(session, "reopen.json");
+    await press(session, keys.enter, "Replace existing file?");
+    await press(session, keys.escape, "Save catalog");
+    await press(session, keys.escape, "Saved phone");
+
+    assert.equal(
+      await readFile(input, "utf8"),
+      original,
+      "Declining replacement rewrote input",
+    );
+
+    await press(session, "s", "Save catalog");
+    await setSavePath(session, "reopened-copy.json");
+    await press(session, keys.enter, "Saved phone");
+
+    assert.deepEqual(
+      JSON.parse(await readFile(join(directory, "reopened-copy.json"), "utf8")),
+      catalog,
+    );
+    assert.equal(await readFile(input, "utf8"), original);
+    session.write("q");
+    await session.waitForExit(0);
+    assertAlternateScreenRestored(session.output());
+
+    const summary = finalSummary(session.output(), "Loaded:");
+
+    assert(summary.includes("reopened-copy.json"), summary);
+    assert.doesNotMatch(summary, /products|\d+(?:\.\d+)?s\b/);
+  });
+  console.log(
+    "PASS saved catalog opens without crawling, navigates, preserves input, and confirms replacement",
+  );
+
+  const malformed = join(directory, "malformed.json");
+
+  await writeFile(malformed, "{ broken");
+  await terminalSession(async (session) => {
+    startFixture(session, ["--input", "malformed.json"], env, directory);
+    await session.waitForExit(1);
+
+    assert(
+      !session.output().includes("\x1b[?1049h"),
+      "Invalid input opened the browser",
+    );
+    assert.doesNotMatch(
+      visible(session.output()),
+      /Catalog loaded|Discovering catalog|Crawl forbidden/,
+    );
+    assert.match(visible(session.output()), /error:/i);
+    assert.equal(await readFile(malformed, "utf8"), "{ broken");
+  });
+  console.log(
+    "PASS malformed saved catalog fails before entering the alternate screen",
+  );
+}
+
 async function terminalCase(
   name: string,
   options: {
@@ -511,6 +614,7 @@ try {
   await browserNavigation(directory);
   await boundedBrowserAndDesktopActions();
   await browserSaves(directory);
+  await browserLoads(directory);
   await terminalCase("browser Ctrl+C", { action: "\x03", expected: 130 });
   await terminalCase("running Ctrl+C", {
     action: "\x03",

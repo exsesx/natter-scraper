@@ -1,4 +1,4 @@
-import { basename } from "node:path";
+import { basename, resolve } from "node:path";
 import { BunServices } from "@effect/platform-bun";
 import { Cause, Console, Data, Effect, Option } from "effect";
 import {
@@ -11,9 +11,10 @@ import {
 import { defaultConcurrency } from "./concurrency";
 import { crawl } from "./crawl";
 import { serializeCatalog } from "./format";
+import { readCatalog } from "./input";
 import { writeResult, writeStream } from "./output";
 import { resolveOutputFormat } from "./output-format";
-import type { OutputFormat } from "./types";
+import type { Catalog, OutputFormat } from "./types";
 
 // Replaced by the standalone build; source execution keeps Bun instructions.
 declare const NATTER_STANDALONE: boolean;
@@ -51,6 +52,7 @@ class UsageError extends Data.TaggedError("UsageError")<{
 
 interface Options {
   concurrency: string;
+  input: Option.Option<string>;
   output: Option.Option<string>;
   format: OutputFormat | "auto";
   pretty: Option.Option<boolean>;
@@ -58,6 +60,13 @@ interface Options {
 }
 
 const helpNotes = (concurrency: number) => `
+INPUT
+  --input FILE opens a saved JSON catalog without crawling or launching Chrome.
+  The file must contain results and total; CSV/TSV and stdin are not supported.
+  Prices and the total are validated before browsing or exporting.
+  The input is unchanged unless you explicitly save over it.
+  --format and --output still select the export format and destination.
+
 OUTPUT
   In a terminal, browse the completed catalog without an automatic export.
   --output FILE saves and exits; add -i / --interactive to browse afterward.
@@ -95,11 +104,11 @@ LIMITS
   Browser resource requests can exceed this count; higher values use more memory
   and increase load on the source site.
   15s per request/browser operation, 10min per run, 2 HTTP retries.
-  Exit codes: 0 success/help, 1 scrape/write failure, 2 usage, 130 Ctrl+C.
+  Exit codes: 0 success/help, 1 read/scrape/write failure, 2 usage, 130 Ctrl+C.
   On macOS/Linux, SIGTERM exits 143. Windows forced termination cannot run cleanup.
 `;
 
-function scrape(
+function runCatalog(
   options: Options,
   dependencies: { crawl?: typeof crawl },
   cancel: () => void,
@@ -119,7 +128,13 @@ function scrape(
             "--concurrency must be a positive safe integer in decimal digits.",
         });
 
+      const inputPath = Option.getOrUndefined(options.input);
       const outputPath = Option.getOrUndefined(options.output);
+
+      if (inputPath !== undefined && (!inputPath.trim() || inputPath === "-"))
+        return yield* new UsageError({
+          message: "--input requires a JSON file path; stdin is not supported.",
+        });
 
       if (outputPath !== undefined && !outputPath.trim())
         return yield* new UsageError({
@@ -148,6 +163,9 @@ function scrape(
         ...(process.env.CI !== undefined ? { ci: process.env.CI } : {}),
         ...(process.env.TERM !== undefined ? { term: process.env.TERM } : {}),
       });
+      // Validate saved data before entering the terminal or writing any output.
+      const imported =
+        inputPath === undefined ? undefined : yield* readCatalog(inputPath);
       const started = performance.now();
       const ui = interactive
         ? yield* Effect.acquireRelease(
@@ -162,16 +180,18 @@ function scrape(
           )
         : undefined;
 
-      if (!ui)
+      if (!ui && !imported)
         yield* writeStream(
           process.stderr,
           `Reading the static catalog (concurrency ${concurrency})…\n`,
         );
 
-      const result = yield* (dependencies.crawl ?? crawl)({
-        concurrency,
-        onProgress: (progress) => ui?.update(progress),
-      });
+      const result: { catalog: Catalog; productCount?: number } = imported
+        ? { catalog: imported }
+        : yield* (dependencies.crawl ?? crawl)({
+            concurrency,
+            onProgress: (progress) => ui?.update(progress),
+          });
 
       const savedPath =
         !ui || outputPath !== undefined
@@ -182,7 +202,9 @@ function scrape(
               }),
               outputPath === undefined ? {} : { path: outputPath },
             )
-          : undefined;
+          : inputPath === undefined
+            ? undefined
+            : resolve(inputPath);
 
       if (ui)
         return yield* ui.complete({
@@ -190,13 +212,17 @@ function scrape(
           format,
           pretty: requestedPretty ?? true,
           ...(savedPath ? { outputPath: savedPath } : {}),
-          productCount: result.productCount,
-          elapsedMs: performance.now() - started,
+          ...(result.productCount === undefined
+            ? {}
+            : {
+                productCount: result.productCount,
+                elapsedMs: performance.now() - started,
+              }),
         });
 
       yield* writeStream(
         process.stderr,
-        `Completed: ${result.productCount} products, ${result.catalog.results.length} results, $${result.catalog.total.toFixed(2)}${savedPath ? `; saved ${savedPath}` : ""}.\n`,
+        `${inputPath === undefined ? `Completed: ${result.productCount} products, ` : "Loaded: "}${result.catalog.results.length} results, $${result.catalog.total.toFixed(2)}${savedPath ? `; saved ${savedPath}` : ""}.\n`,
       );
 
       return 0;
@@ -230,6 +256,10 @@ export function runCli(
     const command = Command.make(
       "natter-scraper",
       {
+        input: Flag.String("input").pipe(
+          Flag.withDescription("Open a saved JSON catalog without scraping"),
+          Flag.optional,
+        ),
         concurrency: Flag.String("concurrency").pipe(
           Flag.withDescription(
             "Maximum concurrent products and document requests; positive integer (higher uses more memory and source capacity)",
@@ -266,13 +296,19 @@ export function runCli(
       },
       (options) =>
         Effect.gen(function* () {
-          completionCode = yield* scrape(options, dependencies, () => cancel());
+          completionCode = yield* runCatalog(options, dependencies, () =>
+            cancel(),
+          );
         }),
     ).pipe(
       Command.withDescription(
-        "Extract every reachable product and enabled storage configuration from the Web Scraper static test catalog.",
+        "Scrape the Web Scraper static catalog, or reopen a saved JSON catalog with --input.",
       ),
       Command.withExamples([
+        {
+          command: `${invocation} --input products.json`,
+          description: "Browse a saved catalog without scraping again",
+        },
         {
           command: `${invocation} --output products.json --pretty`,
           description: "Save readable JSON",

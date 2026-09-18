@@ -26,9 +26,14 @@ delete environment.BUN_BE_BUN;
 delete environment.NODE_OPTIONS;
 delete environment.FIXTURE_URL;
 
-async function run(binary: string, args: string[], fixtureUrl?: string) {
+async function run(
+  binary: string,
+  args: string[],
+  fixtureUrl?: string,
+  extraEnv: NodeJS.ProcessEnv = {},
+) {
   // No Bun, checkout-relative paths, inherited preload options, or desktop tools.
-  const env: NodeJS.ProcessEnv = { ...environment, CI: "1" };
+  const env: NodeJS.ProcessEnv = { ...environment, CI: "1", ...extraEnv };
 
   for (const key of Object.keys(env)) {
     if (key.toUpperCase() === "PATH") delete env[key];
@@ -93,6 +98,64 @@ try {
   assert.equal(invalid.code, 2);
   assert.equal(invalid.stdout, "");
   assert.match(invalid.stderr, /error:/);
+
+  // Exercise the production binary before starting any fixture server. An invalid
+  // Chrome path makes accidental extraction fail even on hosts with Chrome installed.
+  const input = join(directory, "input catalog.json");
+  const catalog = {
+    results: [{ name: "Saved item", description: "From disk.", price: 12.34 }],
+    total: 12.34,
+  };
+  const original = `${JSON.stringify(catalog, null, 4)}\n`;
+  const noChrome = { BUN_CHROME_PATH: join(directory, "missing-chrome") };
+
+  await writeFile(input, original);
+
+  const loaded = await run(
+    production,
+    ["--input", "input catalog.json"],
+    undefined,
+    noChrome,
+  );
+
+  assert.equal(loaded.code, 0, loaded.stderr);
+  assert.equal(loaded.stdout, `${JSON.stringify(catalog)}\n`);
+  assert.match(loaded.stderr, /Loaded:/);
+  assert.match(loaded.stderr, /1 results/);
+  assert.doesNotMatch(loaded.stderr, /products|Discovering|\d+(?:\.\d+)?s\b/);
+
+  const converted = await run(
+    production,
+    ["--input", "input catalog.json", "--output", "loaded.csv"],
+    undefined,
+    noChrome,
+  );
+
+  assert.equal(converted.code, 0, converted.stderr);
+  assert.equal(converted.stdout, "");
+  assert.equal(
+    await readFile(join(directory, "loaded.csv"), "utf8"),
+    "name,description,price,colors\r\nSaved item,From disk.,12.34,\r\n",
+  );
+  assert.equal(
+    await readFile(input, "utf8"),
+    original,
+    "Reopening or converting rewrote input",
+  );
+
+  await writeFile(join(directory, "bad-input.json"), "{ broken");
+
+  const badInput = await run(
+    production,
+    ["--input", "bad-input.json"],
+    undefined,
+    noChrome,
+  );
+
+  assert.equal(badInput.code, 1);
+  assert.equal(badInput.stdout, "");
+  assert.match(badInput.stderr, /error:/i);
+  assert.doesNotMatch(badInput.stderr, /Chrome|Discovering/);
 
   let failing = false;
   const server = Bun.serve({
@@ -241,7 +304,7 @@ try {
   );
 
   console.log(
-    `Standalone ${target}: help, version, usage, JSON/CSV/TSV, format inference, atomic files, failure behavior, and browser checks passed. Headless exports ran outside checkout with no Bun on PATH.`,
+    `Standalone ${target}: help, version, usage, JSON/CSV/TSV, format inference, atomic files, saved catalog loading without Chrome, failure behavior, and browser checks passed. Headless exports ran outside checkout with no Bun on PATH.`,
   );
 } finally {
   await rm(directory, { recursive: true, force: true });

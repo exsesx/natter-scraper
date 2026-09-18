@@ -44,6 +44,7 @@ export interface Completion {
   format: OutputFormat;
   pretty: boolean;
   outputPath?: string;
-  productCount: number;
-  elapsedMs: number;
+  // Saved catalogs contain result rows, but no crawl count or timing metadata.
+  productCount?: number;
+  elapsedMs?: number;
 }

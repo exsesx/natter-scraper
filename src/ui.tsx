@@ -143,9 +143,9 @@ export function createTerminalUI({
               if (completion && code === 0)
                 yield* writeStream(
                   stdout,
-                  "Completed: " +
-                    completion.productCount +
-                    " products, " +
+                  (completion.productCount === undefined
+                    ? "Loaded: "
+                    : `Completed: ${completion.productCount} products, `) +
                     completion.catalog.results.length +
                     " results, $" +
                     completion.catalog.total.toFixed(2) +

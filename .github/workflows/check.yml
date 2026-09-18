@@ -61,6 +61,19 @@ jobs:
           EOF
           sudo apparmor_parser --replace /etc/apparmor.d/natter-ci-chrome
           timeout 15s "$BUN_CHROME_PATH" --headless --disable-gpu --dump-dom about:blank
+      - name: Configure Chrome sandbox on Windows
+        if: matrix.platform == 'windows-x64'
+        shell: pwsh
+        env:
+          BUN_CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          # Chrome for Testing ships the installer that grants its sandbox access.
+          $chromeDirectory = Split-Path -Parent $env:BUN_CHROME_PATH
+          $chromeSetup = Join-Path $chromeDirectory 'setup.exe'
+          $setupResult = Start-Process -FilePath $chromeSetup -ArgumentList "--configure-browser-in-directory=`"$chromeDirectory`"" -Wait -PassThru
+          # Upstream notes that setup can return nonzero after applying permissions.
+          # Keep that diagnostic; the following startup and fixture checks must pass.
+          Write-Host "Chrome sandbox setup exit code: $($setupResult.ExitCode)"
       - name: Verify WebView startup
         env:
           BUN_CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}

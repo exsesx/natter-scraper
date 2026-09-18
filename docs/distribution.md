@@ -94,6 +94,8 @@ The workflow installs a browser with [setup-chrome](https://github.com/browser-a
 
 On Ubuntu runners, CI allows user namespaces for that exact browser executable through an AppArmor profile, following [Chromium's guidance](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md). It checks browser startup before and after loading the profile. Chrome's sandbox remains enabled; the workflow does not change the machine-wide namespace policy. Linux installations with the same restriction may need an administrator to configure their browser's profile.
 
+On Windows x64, CI runs Chrome for Testing's bundled `setup.exe` to grant its sandbox access to the downloaded browser files. Without those permissions, Chrome can report access denied and fail to start its network service. This follows [Puppeteer's Windows sandbox guidance](https://pptr.dev/troubleshooting#chrome-reports-sandbox-errors-on-windows) and keeps the sandbox enabled. Windows arm64 uses a different Chromium snapshot package.
+
 ## Desktop actions
 
 Scraping and file export work without a desktop session. Browser actions that copy text or open a file or folder need the OS integration below:

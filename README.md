@@ -6,9 +6,9 @@ For assessment review, use `bun run scrape --no-interactive` to print the JSON o
 
 ## Demo
 
-[![Watch the Natter scraper demo](docs/assets/demo.png)](docs/assets/demo.mp4)
+https://github.com/user-attachments/assets/0e20a78d-33aa-46f4-a9b4-102a74258b60
 
-[Watch the full demo (1 minute 50 seconds)](docs/assets/demo.mp4) to see the scraper and terminal browser in use.
+[Download the demo (1 minute 50 seconds)](docs/assets/demo.mp4).
 
 ## Run
 

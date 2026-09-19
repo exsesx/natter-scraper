@@ -4,6 +4,12 @@ A TypeScript CLI for the [Web Scraper static e-commerce catalog](https://webscra
 
 For assessment review, use `bun run scrape --no-interactive` to print the JSON or `bun run scrape -o products.json` to save it. The terminal browser, CSV/TSV exports, reopening saved catalogs, and standalone binaries are optional conveniences. The [implementation note](#implementation-note-for-the-assessment) explains the scope and the move from copied pricing formulas to browser-observed prices.
 
+## Demo
+
+[![Watch the Natter scraper demo](docs/assets/demo.png)](docs/assets/demo.mp4)
+
+[Watch the full demo (1 minute 50 seconds)](docs/assets/demo.mp4) to see the scraper and terminal browser in use.
+
 ## Run
 
 Supported platforms are macOS and Linux with glibc, on x64 and arm64. Use Bun **1.4.2**, pinned in `.bun-version`, `mise.toml`, and `package.json`.

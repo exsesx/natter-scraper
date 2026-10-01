@@ -1,6 +1,8 @@
 # Effect in this scraper
 
-[package.json](../package.json) pins Effect v4 and `@effect/platform-bun` to `4.0.0-rc.115`. The CLI uses `effect/unstable/cli`. These are prerelease APIs; check the installed version when changing them.
+[package.json](../package.json) pins Effect and `@effect/platform-bun` to stable `4.0.0`. Keep all Effect packages aligned, including the transitive `@effect/platform-node-shared` in `bun.lock`. The CLI uses `effect/cli`; it remains tagged `@stability unstable` upstream, so minor releases can change its APIs even though the package is stable.
+
+The upgrade from `4.0.0-rc.115` removes the old `effect/unstable/cli` import path. The intervening releases also change partition tuple order, Schema helpers, encoding entry points, and explicit scope-closing types; the scraper does not use those APIs. Runtime fixes affect races, sibling interruption, and finalizers, which are covered by crawl, output, UI, and terminal checks. Review the [Effect changelog](https://github.com/Effect-TS/effect/blob/effect%404.0.0/packages/effect/CHANGELOG.md) and run all three [verification commands](distribution.md#verify-on-the-target-platform) for future upgrades.
 
 An Effect describes work that can return a value or fail. Creating one does not start the work; the runtime runs it. A scope gives resources a shared lifetime, and a finalizer is the cleanup registered for the end of that lifetime. A fiber is a running Effect that can be interrupted and awaited.
 

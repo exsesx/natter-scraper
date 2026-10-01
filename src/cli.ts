@@ -1,13 +1,7 @@
 import { basename, resolve } from "node:path";
 import { BunServices } from "@effect/platform-bun";
 import { Cause, Console, Data, Effect, Option } from "effect";
-import {
-  CliConfig,
-  CliOutput,
-  Command,
-  Flag,
-  GlobalFlag,
-} from "effect/unstable/cli";
+import { CliConfig, CliOutput, Command, Flag, GlobalFlag } from "effect/cli";
 import { version } from "../package.json";
 import { defaultConcurrency } from "./concurrency";
 import { crawl } from "./crawl";

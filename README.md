@@ -168,7 +168,7 @@ The benchmark uses the production reader on 12 synthetic products with independe
 
 [CI](.github/workflows/check.yml) runs `check`, `test:terminal`, and `test:binary`, then builds native artifacts for macOS and Linux on x64 and arm64. The benchmark is a separate manual command. Check [workflow results](https://github.com/exsesx/natter-scraper/actions/workflows/check.yml) for a specific commit. Cross-compilation alone does not establish native behavior; [platform verification](docs/distribution.md#verify-on-the-target-platform) records the test boundaries.
 
-The toolchain pins Bun **1.4.2** and TypeScript **7.0.2**. Effect and `@effect/platform-bun` use **4.0.0-rc.115**; keep them aligned. Effect v4 is a release candidate and its `effect/unstable/cli` API is explicitly unstable. Exact dependency versions are in [package.json](package.json) and `bun.lock`.
+The toolchain pins Bun **1.4.2** and TypeScript **7.0.2**. Effect and `@effect/platform-bun` use stable **4.0.0**; keep them aligned. The CLI imports `effect/cli`, which remains tagged `@stability unstable` upstream and can change in minor releases. Exact dependency versions are in [package.json](package.json) and `bun.lock`; review release notes and rerun all three checks before upgrading.
 
 | Core requirement | Implementation and checks |
 | --- | --- |

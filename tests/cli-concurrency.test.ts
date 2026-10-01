@@ -87,6 +87,21 @@ describe("CLI concurrency", () => {
     expect(result.stderr).not.toContain("CRAWL");
   });
 
+  test.each(["-1", "-3.70"])(
+    "rejects a separate negative value %s before crawling",
+    async (value) => {
+      const result = await run(["--concurrency", value]);
+
+      expect(result.code).toBe(2);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain(
+        "--concurrency must be a positive safe integer in decimal digits.",
+      );
+      expect(result.stderr).not.toContain("CRAWL");
+      expect(result.stderr).not.toContain("Reading the static catalog");
+    },
+  );
+
   test("help states concurrency scope and the ten-minute deadline", async () => {
     const result = await run(["--help"]);
 

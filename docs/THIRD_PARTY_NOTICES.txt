@@ -10,8 +10,8 @@ TypeScript compilation. Preserve this file when redistributing the executable.
 Refresh the snapshot when the lockfile or embedded Bun version changes.
 
 Bun: 1.4.2
-bun.lock SHA-256: 323ae882c8c0d79f62d6a5649bf9a6f942cff7051740cba47e5cc53535593612
-Package instances: 126
+bun.lock SHA-256: 8aba6a6d8408c61d152109e3355a4060e62ed9b6234690a5687e533b3c92da26
+Package instances: 125
 
 Package license and notice texts below are copied from the installed packages.
 Identical texts are grouped, retaining every package and copyright notice.
@@ -121,19 +121,19 @@ For compatibility reasons, the following packages are embedded into Bun's binary
 PRODUCTION DEPENDENCY INVENTORY
 
 @alcalzone/ansi-tokenize@0.3.1 | MIT | https://registry.npmjs.org/@alcalzone/ansi-tokenize/0.3.1
-@effect/platform-bun@4.0.0-rc.115 | MIT | https://registry.npmjs.org/@effect/platform-bun/4.0.0-rc.115
-@effect/platform-node-shared@4.0.0-rc.115 | MIT | https://registry.npmjs.org/@effect/platform-node-shared/4.0.0-rc.115
+@effect/platform-bun@4.0.0 | MIT | https://registry.npmjs.org/@effect/platform-bun/4.0.0
+@effect/platform-node-shared@4.0.0 | MIT | https://registry.npmjs.org/@effect/platform-node-shared/4.0.0
 @sec-ant/readable-stream@0.4.1 | MIT | https://registry.npmjs.org/@sec-ant/readable-stream/0.4.1
 @sindresorhus/merge-streams@4.0.0 | MIT | https://registry.npmjs.org/@sindresorhus/merge-streams/4.0.0
-@types/node@26.6.1 | MIT | https://registry.npmjs.org/@types/node/26.6.1
+@types/node@26.6.3 | MIT | https://registry.npmjs.org/@types/node/26.6.3
 @types/react@19.3.0 | MIT | https://registry.npmjs.org/@types/react/19.3.0
-@types/ws@8.18.1 | MIT | https://registry.npmjs.org/@types/ws/8.18.1
+@types/ws@8.18.2 | MIT | https://registry.npmjs.org/@types/ws/8.18.2
 ansi-escapes@7.3.0 | MIT | https://registry.npmjs.org/ansi-escapes/7.3.0
-ansi-regex@6.3.0 | MIT | https://registry.npmjs.org/ansi-regex/6.3.0
+ansi-regex@6.4.0 | MIT | https://registry.npmjs.org/ansi-regex/6.4.0
 ansi-styles@6.2.3 | MIT | https://registry.npmjs.org/ansi-styles/6.2.3
 auto-bind@5.0.1 | MIT | https://registry.npmjs.org/auto-bind/5.0.1
 boolbase@1.0.0 | ISC | https://registry.npmjs.org/boolbase/1.0.0
-bundle-name@4.1.0 | MIT | https://registry.npmjs.org/bundle-name/4.1.0
+bundle-name@4.1.1 | MIT | https://registry.npmjs.org/bundle-name/4.1.1
 chalk@5.6.2 | MIT | https://registry.npmjs.org/chalk/5.6.2
 cheerio-select@2.1.0 | BSD-2-Clause | https://registry.npmjs.org/cheerio-select/2.1.0
 cheerio@1.2.0 | MIT | https://registry.npmjs.org/cheerio/1.2.0
@@ -156,7 +156,7 @@ dom-serializer@2.0.0 | MIT | https://registry.npmjs.org/dom-serializer/2.0.0
 domelementtype@2.3.0 | BSD-2-Clause | https://registry.npmjs.org/domelementtype/2.3.0
 domhandler@5.0.3 | BSD-2-Clause | https://registry.npmjs.org/domhandler/5.0.3
 domutils@3.2.2 | BSD-2-Clause | https://registry.npmjs.org/domutils/3.2.2
-effect@4.0.0-rc.115 | MIT | https://registry.npmjs.org/effect/4.0.0-rc.115
+effect@4.0.0 | MIT | https://registry.npmjs.org/effect/4.0.0
 encoding-sniffer@0.2.1 | MIT | https://registry.npmjs.org/encoding-sniffer/0.2.1
 entities@4.5.0 | BSD-2-Clause | https://registry.npmjs.org/entities/4.5.0
 entities@6.0.1 | BSD-2-Clause | https://registry.npmjs.org/entities/6.0.1
@@ -205,7 +205,6 @@ parse5@7.3.0 | MIT | https://registry.npmjs.org/parse5/7.3.0
 patch-console@2.0.0 | MIT | https://registry.npmjs.org/patch-console/2.0.0
 path-key@3.1.1 | MIT | https://registry.npmjs.org/path-key/3.1.1
 path-key@4.0.0 | MIT | https://registry.npmjs.org/path-key/4.0.0
-powershell-utils@0.1.0 | MIT | https://registry.npmjs.org/powershell-utils/0.1.0
 powershell-utils@0.2.1 | MIT | https://registry.npmjs.org/powershell-utils/0.2.1
 pretty-ms@9.3.1 | MIT | https://registry.npmjs.org/pretty-ms/9.3.1
 react-reconciler@0.33.0 | MIT | https://registry.npmjs.org/react-reconciler/0.33.0
@@ -220,9 +219,9 @@ shebang-command@2.0.0 | MIT | https://registry.npmjs.org/shebang-command/2.0.0
 shebang-regex@3.0.0 | MIT | https://registry.npmjs.org/shebang-regex/3.0.0
 signal-exit@3.0.7 | ISC | https://registry.npmjs.org/signal-exit/3.0.7
 signal-exit@4.1.0 | ISC | https://registry.npmjs.org/signal-exit/4.1.0
-slice-ansi@9.0.0 | MIT | https://registry.npmjs.org/slice-ansi/9.0.0
+slice-ansi@9.0.1 | MIT | https://registry.npmjs.org/slice-ansi/9.0.1
 stack-utils@2.0.6 | MIT | https://registry.npmjs.org/stack-utils/2.0.6
-string-width@8.2.2 | MIT | https://registry.npmjs.org/string-width/8.2.2
+string-width@8.3.0 | MIT | https://registry.npmjs.org/string-width/8.3.0
 strip-ansi@7.2.0 | MIT | https://registry.npmjs.org/strip-ansi/7.2.0
 strip-final-newline@2.0.0 | MIT | https://registry.npmjs.org/strip-final-newline/2.0.0
 strip-final-newline@4.0.0 | MIT | https://registry.npmjs.org/strip-final-newline/4.0.0
@@ -234,16 +233,16 @@ type-fest@1.4.0 | (MIT OR CC0-1.0) | https://registry.npmjs.org/type-fest/1.4.0
 type-fest@2.19.0 | (MIT OR CC0-1.0) | https://registry.npmjs.org/type-fest/2.19.0
 type-fest@5.10.0 | (MIT OR CC0-1.0) | https://registry.npmjs.org/type-fest/5.10.0
 undici-types@8.9.0 | MIT | https://registry.npmjs.org/undici-types/8.9.0
-undici@7.29.1 | MIT | https://registry.npmjs.org/undici/7.29.1
+undici@7.30.0 | MIT | https://registry.npmjs.org/undici/7.30.0
 unicorn-magic@0.3.0 | MIT | https://registry.npmjs.org/unicorn-magic/0.3.0
 unique-string@3.0.0 | MIT | https://registry.npmjs.org/unique-string/3.0.0
 whatwg-encoding@3.1.1 | MIT | https://registry.npmjs.org/whatwg-encoding/3.1.1
 whatwg-mimetype@4.0.0 | MIT | https://registry.npmjs.org/whatwg-mimetype/4.0.0
 which@2.0.2 | ISC | https://registry.npmjs.org/which/2.0.2
 widest-line@6.0.0 | MIT | https://registry.npmjs.org/widest-line/6.0.0
-wrap-ansi@10.0.1 | MIT | https://registry.npmjs.org/wrap-ansi/10.0.1
-ws@8.21.3 | MIT | https://registry.npmjs.org/ws/8.21.3
-wsl-utils@1.0.0 | MIT | https://registry.npmjs.org/wsl-utils/1.0.0
+wrap-ansi@10.0.2 | MIT | https://registry.npmjs.org/wrap-ansi/10.0.2
+ws@8.22.0 | MIT | https://registry.npmjs.org/ws/8.22.0
+wsl-utils@1.0.1 | MIT | https://registry.npmjs.org/wsl-utils/1.0.1
 yoctocolors@2.2.0 | MIT | https://registry.npmjs.org/yoctocolors/2.2.0
 yoga-layout@3.2.1 | MIT | https://registry.npmjs.org/yoga-layout/3.2.1
 
@@ -279,9 +278,9 @@ SOFTWARE.
 
 NOTICE 2
 
-@effect/platform-bun@4.0.0-rc.115 (MIT) — npm package LICENSE
-@effect/platform-node-shared@4.0.0-rc.115 (MIT) — npm package LICENSE
-effect@4.0.0-rc.115 (MIT) — npm package LICENSE
+@effect/platform-bun@4.0.0 (MIT) — npm package LICENSE
+@effect/platform-node-shared@4.0.0 (MIT) — npm package LICENSE
+effect@4.0.0 (MIT) — npm package LICENSE
 
 MIT License
 
@@ -339,10 +338,10 @@ NOTICE 4
 
 @sindresorhus/merge-streams@4.0.0 (MIT) — npm package license
 ansi-escapes@7.3.0 (MIT) — npm package license
-ansi-regex@6.3.0 (MIT) — npm package license
+ansi-regex@6.4.0 (MIT) — npm package license
 ansi-styles@6.2.3 (MIT) — npm package license
 auto-bind@5.0.1 (MIT) — npm package license
-bundle-name@4.1.0 (MIT) — npm package license
+bundle-name@4.1.1 (MIT) — npm package license
 chalk@5.6.2 (MIT) — npm package license
 cli-boxes@4.0.1 (MIT) — npm package license
 cli-cursor@4.0.0 (MIT) — npm package license
@@ -380,13 +379,12 @@ onetime@5.1.2 (MIT) — npm package license
 open@11.0.4 (MIT) — npm package license
 parse-ms@4.0.0 (MIT) — npm package license
 path-key@4.0.0 (MIT) — npm package license
-powershell-utils@0.1.0 (MIT) — npm package license
 powershell-utils@0.2.1 (MIT) — npm package license
 pretty-ms@9.3.1 (MIT) — npm package license
 restore-cursor@4.0.0 (MIT) — npm package license
 run-applescript@7.1.0 (MIT) — npm package license
 run-jxa@3.0.0 (MIT) — npm package license
-string-width@8.2.2 (MIT) — npm package license
+string-width@8.3.0 (MIT) — npm package license
 strip-ansi@7.2.0 (MIT) — npm package license
 strip-final-newline@4.0.0 (MIT) — npm package license
 subsume@4.0.0 (MIT) — npm package license
@@ -399,8 +397,8 @@ type-fest@5.10.0 ((MIT OR CC0-1.0)) — npm package license-mit
 unicorn-magic@0.3.0 (MIT) — npm package license
 unique-string@3.0.0 (MIT) — npm package license
 widest-line@6.0.0 (MIT) — npm package license
-wrap-ansi@10.0.1 (MIT) — npm package license
-wsl-utils@1.0.0 (MIT) — npm package license
+wrap-ansi@10.0.2 (MIT) — npm package license
+wsl-utils@1.0.1 (MIT) — npm package license
 yoctocolors@2.2.0 (MIT) — npm package license
 
 MIT License
@@ -417,9 +415,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 NOTICE 5
 
-@types/node@26.6.1 (MIT) — npm package LICENSE
+@types/node@26.6.3 (MIT) — npm package LICENSE
 @types/react@19.3.0 (MIT) — npm package LICENSE
-@types/ws@8.18.1 (MIT) — npm package LICENSE
+@types/ws@8.18.2 (MIT) — npm package LICENSE
 
 MIT License
 
@@ -1471,7 +1469,7 @@ ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 NOTICE 32
 
-slice-ansi@9.0.0 (MIT) — npm package license
+slice-ansi@9.0.1 (MIT) — npm package license
 
 MIT License
 
@@ -1646,7 +1644,7 @@ express Statement of Purpose.
 NOTICE 35
 
 undici-types@8.9.0 (MIT) — npm package LICENSE
-undici@7.29.1 (MIT) — npm package LICENSE
+undici@7.30.0 (MIT) — npm package LICENSE
 
 MIT License
 
@@ -1674,7 +1672,7 @@ SOFTWARE.
 
 NOTICE 36
 
-undici@7.29.1 (MIT) — npm package lib/web/fetch/LICENSE
+undici@7.30.0 (MIT) — npm package lib/web/fetch/LICENSE
 
 MIT License
 
@@ -1717,7 +1715,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 NOTICE 38
 
-ws@8.21.3 (MIT) — npm package LICENSE
+ws@8.22.0 (MIT) — npm package LICENSE
 
 Copyright (c) 2011 Einar Otto Stangvik <einaros@gmail.com>
 Copyright (c) 2013 Arnout Kazemier and contributors
